@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Feedback: {{ session.title }}{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <header class="chat-header">
+        <h1>{{ session.title }}</h1>
+        {% if session.description %}
+            <p>{{ session.description }}</p>
+        {% endif %}
+    </header>
+
+    <div class="chat-messages" id="chat-messages">
+        <!-- Messages will be injected here via JS -->
+    </div>
+
+    <!-- Inputs -->
+    <div class="chat-input-area" id="input-area" style="display: none;">
+        <!-- Score Input -->
+        <div id="score-input-container" class="input-container" style="display: none;">
+            <p class="input-instruction">Selecione uma nota:</p>
+            <div class="score-buttons" id="score-buttons">
+                {% if session.score_type == "nps" or session.score_type == "usefulness" %}
+                    {% for i in range(0, 11) %}
+                        <button class="score-btn" data-score="{{ i }}">{{ i }}</button>
+                    {% endfor %}
+                {% else %}
+                    {% for i in range(1, 6) %}
+                        <button class="score-btn" data-score="{{ i }}">{{ i }}</button>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Text Input -->
+        <div id="text-input-container" class="input-container" style="display: none;">
+            <textarea id="chat-textarea" placeholder="Digite sua resposta..." rows="2"></textarea>
+            <button id="send-btn" class="send-btn">Enviar</button>
+        </div>
+    </div>
+    
+    <div id="start-container" class="start-container">
+        <button id="start-chat-btn" class="start-btn">Iniciar Feedback</button>
+    </div>
+</div>
+
+<script>
+    // Pass session data to JS
+    window.AppConfig = {
+        publicToken: "{{ public_token }}",
+        sessionTitle: "{{ session.title }}"
+    };
+</script>
+{% endblock %}
