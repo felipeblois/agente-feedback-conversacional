@@ -1,0 +1,330 @@
+# Agente de Feedback Conversacional — Análise Completa e Plano de Implementação
+
+## 1. Visão Geral do Projeto
+
+O projeto é um **MVP local** de um agente de feedback conversacional pós-apresentação/treinamento. A proposta é substituir formulários tradicionais (Google Forms, Typeform) por uma experiência conversacional adaptativa, onde as perguntas mudam conforme a nota inicial do participante. Isso gera dados mais ricos e acionáveis.
+
+**Diretório de trabalho:** `/mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional`
+
+> [!NOTE]
+> O projeto já tem um repositório git inicializado com `.git/`, `README.md` e o arquivo de especificação.
+
+---
+
+## 2. Análise do Escopo
+
+### O que o MVP entrega
+
+| Capacidade | Descrição |
+|---|---|
+| Cadastro de sessões | Admin cria sessão de treinamento com título, descrição e configurações |
+| Link público | Cada sessão gera um link compartilhável para participantes |
+| Coleta de score | Participante dá nota (NPS/CSAT/Usefulness) |
+| Conversa adaptativa | 2-4 perguntas que mudam conforme a nota dada |
+| Persistência local | SQLite — zero dependência de infra |
+| Sumarização por IA | Resumo executivo gerado por LLM (OpenAI/Claude/Gemini) |
+| Classificação temática | Agrupamento automático de feedbacks em temas |
+| Dashboard admin | Painel Streamlit com métricas e insights |
+| Exportação | CSV e PDF dos dados e análises |
+
+### Fronteiras claras (fora do escopo)
+
+SSO, integrações Slack/Teams/WhatsApp, multi-tenant, deploy cloud, cobrança, filas distribuídas. Isso é correto para um MVP — manter foco no core loop de valor.
+
+---
+
+## 3. Análise da Stack Técnica
+
+### Backend: FastAPI + SQLAlchemy + Alembic
+
+| Aspecto | Avaliação |
+|---|---|
+| **FastAPI** | Excelente escolha. Tipagem nativa, async, docs automáticas (Swagger/ReDoc) |
+| **SQLAlchemy** | Robusto, suporte completo a SQLite, mapeamento ORM maduro |
+| **Alembic** | Necessário para migrações controladas, mesmo com SQLite |
+| **Pydantic** | Validação de dados integrada ao FastAPI |
+| **LiteLLM** | Abstração sobre múltiplos providers (OpenAI, Anthropic, Google). Evita vendor lock-in |
+| **Uvicorn** | Servidor ASGI rápido, padrão para FastAPI |
+
+### Frontend: Streamlit + Jinja2
+
+| Aspecto | Avaliação |
+|---|---|
+| **Streamlit (admin)** | Rápido para prototipar dashboards, bom para MVP |
+| **Jinja2 (participante)** | HTML renderizado server-side, simples e eficaz para formulário conversacional |
+
+### Banco: SQLite
+
+Adequado para MVP local. Sem setup, sem servidor. O schema pode migrar para PostgreSQL depois sem grandes mudanças graças ao SQLAlchemy.
+
+> [!TIP]
+> A escolha de LiteLLM é estratégica: permite testar com Ollama local (gratuito) durante desenvolvimento e trocar para APIs pagas em produção sem refatorar código.
+
+---
+
+## 4. Análise do Modelo de Dados
+
+### Diagrama de Relacionamentos
+
+```mermaid
+erDiagram
+    sessions ||--o{ participants : "tem"
+    sessions ||--o{ responses : "tem"
+    sessions ||--o{ analysis_runs : "tem"
+    participants ||--o{ responses : "responde"
+    responses ||--o{ messages : "contém"
+    responses ||--o{ themes : "classificada em"
+
+    sessions {
+        int id PK
+        string title
+        text description
+        string score_type
+        boolean is_anonymous
+        int max_followup_questions
+        string public_token UK
+        string status
+        datetime created_at
+        datetime updated_at
+    }
+
+    participants {
+        int id PK
+        int session_id FK
+        string name
+        string email
+        boolean anonymous
+        datetime created_at
+    }
+
+    responses {
+        int id PK
+        int session_id FK
+        int participant_id FK
+        int score
+        string status
+        datetime started_at
+        datetime completed_at
+    }
+
+    messages {
+        int id PK
+        int response_id FK
+        string sender
+        int message_order
+        text message_text
+        string message_type
+        datetime created_at
+    }
+
+    themes {
+        int id PK
+        int response_id FK
+        string theme_name
+        string sentiment
+        float confidence
+        datetime created_at
+    }
+
+    analysis_runs {
+        int id PK
+        int session_id FK
+        string provider
+        string model
+        text summary
+        text positives
+        text negatives
+        text recommendations
+        float avg_score
+        int response_count
+        datetime created_at
+    }
+```
+
+### Avaliação do Modelo
+
+| Aspecto | Status | Comentário |
+|---|---|---|
+| Normalização | ✅ Adequada | Separação clara de responsabilidades por tabela |
+| Relacionamentos | ✅ Corretos | FKs bem definidos, cardinalidades fazem sentido |
+| Flexibilidade | ✅ Boa | `score_type` permite NPS/CSAT/Usefulness |
+| Extensibilidade | ✅ Pensada | `analysis_runs` permite múltiplas análises por sessão |
+| Rastreabilidade | ✅ Completa | `messages` registra toda a conversa com ordem |
+
+> [!IMPORTANT]
+> **Decisão de design:** `positives`, `negatives` e `recommendations` na tabela `analysis_runs` estão como `text/json`. Implementarei como **JSON** (SQLAlchemy suporta JSON no SQLite), permitindo armazenar listas estruturadas sem tabelas adicionais.
+
+---
+
+## 5. Análise de Endpoints
+
+### Mapa completo de rotas
+
+| Método | Rota | Camada | Propósito |
+|---|---|---|---|
+| `GET` | `/health` | Sistema | Health check |
+| `POST` | `/api/v1/sessions` | Admin | Criar sessão |
+| `GET` | `/api/v1/sessions` | Admin | Listar sessões |
+| `GET` | `/api/v1/sessions/{id}` | Admin | Detalhar sessão |
+| `PATCH` | `/api/v1/sessions/{id}` | Admin | Atualizar sessão |
+| `DELETE` | `/api/v1/sessions/{id}` | Admin | Arquivar sessão |
+| `GET` | `/f/{token}` | Público | Página do participante |
+| `POST` | `/api/v1/public/{token}/start` | Público | Iniciar resposta |
+| `POST` | `/api/v1/public/{token}/score` | Público | Enviar nota |
+| `POST` | `/api/v1/public/{token}/message` | Público | Enviar mensagem |
+| `POST` | `/api/v1/public/{token}/finish` | Público | Finalizar conversa |
+| `POST` | `/api/v1/sessions/{id}/analyze` | Admin | Executar análise IA |
+| `GET` | `/api/v1/sessions/{id}/analysis` | Admin | Ver análise |
+| `GET` | `/api/v1/sessions/{id}/export/csv` | Admin | Exportar CSV |
+| `GET` | `/api/v1/sessions/{id}/export/pdf` | Admin | Exportar PDF |
+
+**Total: 15 endpoints** — escopo adequado para MVP.
+
+---
+
+## 6. Análise das Regras de Negócio
+
+| Regra | Complexidade | Comentário |
+|---|---|---|
+| `public_token` único por sessão | Baixa | UUID ou nanoid |
+| Resposta pertence a uma sessão | Baixa | FK constraint |
+| Participante pode ser anônimo | Baixa | Flag booleana |
+| Análise exige ≥ 3 respostas completas | Média | Validação no service |
+| `score_type`: nps, csat, usefulness | Baixa | Enum |
+| Máximo 4 perguntas adaptativas | Média | Contador no conversation_service |
+| Perguntas curtas e objetivas | Média | Constraint no prompt |
+| Pergunta principal antes da conversa | Baixa | Fluxo sequencial forçado |
+
+---
+
+## 7. Análise das 11 Etapas de Implementação
+
+| Etapa | Nome | Deps | Complexidade | Estimativa |
+|---|---|---|---|---|
+| 1 | Base do projeto | — | Baixa | ~1h |
+| 2 | Banco e modelos | Etapa 1 | Média | ~2h |
+| 3 | CRUD de sessões | Etapa 2 | Média | ~2h |
+| 4 | Fluxo público do respondente | Etapa 3 | Alta | ~3-4h |
+| 5 | Regra de perguntas adaptativas | Etapa 4 | Alta | ~2-3h |
+| 6 | Painel admin básico | Etapa 3 | Média | ~2h |
+| 7 | Integração com LLM | Etapa 1 | Média | ~2h |
+| 8 | Sumarização e temas | Etapas 4,7 | Alta | ~3h |
+| 9 | Dashboard analítico completo | Etapas 6,8 | Média | ~2-3h |
+| 10 | Exportação | Etapas 8 | Média | ~2h |
+| 11 | Testes mínimos | Todas | Média | ~2h |
+
+**Estimativa total: ~22-28h de desenvolvimento**
+
+```mermaid
+flowchart LR
+    E1["Etapa 1\nBase"] --> E2["Etapa 2\nBanco"]
+    E2 --> E3["Etapa 3\nCRUD Sessões"]
+    E3 --> E4["Etapa 4\nFluxo Público"]
+    E4 --> E5["Etapa 5\nPerguntas Adaptativas"]
+    E3 --> E6["Etapa 6\nPainel Admin"]
+    E1 --> E7["Etapa 7\nLLM Client"]
+    E4 & E7 --> E8["Etapa 8\nSumarização"]
+    E6 & E8 --> E9["Etapa 9\nDashboard Completo"]
+    E8 --> E10["Etapa 10\nExportação"]
+    E9 & E10 --> E11["Etapa 11\nTestes"]
+```
+
+---
+
+## 8. Decisões Arquiteturais Propostas
+
+### 8.1 Estrutura de camadas
+
+```
+Rotas (API) → Schemas (Validação) → Services (Lógica) → Models (ORM) → DB
+```
+
+Cada camada tem responsabilidade única. Rotas não acessam banco diretamente.
+
+### 8.2 Geração de `public_token`
+
+Usarei `secrets.token_urlsafe(8)` — gera tokens curtos, seguros e URL-friendly como `abc123xyz`.
+
+### 8.3 Perguntas adaptativas
+
+Implementarei como arquivo JSON/YAML estático com árvore de decisão baseada em faixa de score:
+- **0-6 (Detratores):** explorar frustração, o que faltou
+- **7-8 (Neutros):** explorar melhorias possíveis
+- **9-10 (Promotores):** explorar valor percebido, recomendação
+
+### 8.4 LLM Client
+
+LiteLLM como abstração. Fallback chain: provider configurado → segundo provider → erro graceful. Prompts em arquivos `.md` separados para fácil iteração.
+
+### 8.5 Scripts de execução
+
+Como o projeto roda em Windows, criarei scripts `.bat` e `.sh` (para WSL), além de um `Makefile` opcional.
+
+---
+
+## 9. Riscos e Mitigações
+
+| Risco | Impacto | Mitigação |
+|---|---|---|
+| API keys não configuradas | LLM não funciona | Fallback graceful + mensagem clara no painel |
+| SQLite concorrência | Locks em escrita simultânea | WAL mode + retry. MVP local tende a ter baixa concorrência |
+| Streamlit e FastAPI na mesma máquina | Conflito de portas | Portas configuráveis via .env (8000 e 8501) |
+| Prompts mal calibrados | Respostas ruins da IA | Prompts em arquivos separados, fácil de iterar |
+| Dependência de LiteLLM | Breaking changes | Pin de versão no requirements.txt |
+
+---
+
+## 10. Proposta de Execução
+
+Proponho executar na ordem exata definida na spec, que já está bem sequenciada. A implementação será feita **etapa a etapa, com sua aprovação antes de cada uma**.
+
+### Fase 1 — Fundação (Etapas 1-2)
+- Setup do projeto, dependências, configuração
+- Modelos de banco, migrações, SQLite
+
+### Fase 2 — Core Loop (Etapas 3-5)
+- CRUD de sessões
+- Fluxo completo do participante
+- Perguntas adaptativas
+
+### Fase 3 — Inteligência (Etapas 6-8)
+- Painel admin básico
+- Integração LLM
+- Sumarização e classificação temática
+
+### Fase 4 — Polimento (Etapas 9-11)
+- Dashboard analítico completo
+- Exportação CSV/PDF
+- Testes mínimos
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Preciso da sua confirmação antes de iniciar qualquer implementação.** Especificamente:
+> 
+> 1. **Você concorda com a ordem de execução proposta?** (Fundação → Core Loop → Inteligência → Polimento)
+> 2. **Devo começar pela Etapa 1 (Base do projeto)?**
+> 3. **Quais API keys de LLM você já tem disponíveis?** (OpenAI, Anthropic, Google) — isso influencia configuração inicial
+> 4. **Você usa WSL ou PowerShell como terminal principal?** — impacta os scripts de execução
+
+---
+
+## Verification Plan
+
+### Ao final de cada etapa
+
+- Rodar testes automatizados relevantes
+- Verificar que o critério de aceite da etapa está atendido
+- Validar visualmente (para etapas com UI)
+
+### Ao final do MVP
+
+1. Criar sessão pelo painel admin
+2. Acessar link público e completar conversa
+3. Verificar dados no banco
+4. Gerar análise por IA
+5. Visualizar dashboard com métricas
+6. Exportar CSV
+7. Todos os testes passando
