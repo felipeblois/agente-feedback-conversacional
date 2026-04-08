@@ -1,10 +1,11 @@
 import re
+from typing import List, Dict
 
 class LlmFallback:
     """
     Static rules for analysis and summarization when LLMs are unavailable.
     """
-    def summarize(self, all_responses: list[str]) -> dict:
+    def summarize(self, all_responses: List[str]) -> dict:
         total_words = sum(len(r.split()) for r in all_responses)
         summary = f"Recebemos {len(all_responses)} feedbacks de texto totalizando cerca de {total_words} palavras. "
         
@@ -29,7 +30,7 @@ class LlmFallback:
             "recommendations": ["Aprofunde os assuntos mais comentados.", "Verifique se a duração da sessão foi adequada."]
         }
         
-    def classify_theme(self, text: str) -> list[dict]:
+    def classify_theme(self, text: str) -> List[Dict]:
         text = text.lower()
         themes = []
         

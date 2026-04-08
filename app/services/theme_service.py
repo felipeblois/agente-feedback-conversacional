@@ -1,10 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import List, Dict
 
 from app.models.theme import Theme
 
 class ThemeService:
-    async def create_themes(self, db: AsyncSession, response_id: int, themes_data: list[dict]):
+    async def create_themes(self, db: AsyncSession, response_id: int, themes_data: List[Dict]):
         for t_data in themes_data:
             db_obj = Theme(
                 response_id=response_id,
