@@ -29,12 +29,16 @@ st.divider()
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("Análise com IA")
-    if st.button("Run / Analyze (Ollama/Gemini)"):
-        with st.spinner("Analisando..."):
+    st.subheader("Análise de Feedbacks")
+    
+    engine = st.radio("Selecione o Motor de Análise", options=["🤖 Google Gemini 2.5 (Inteligência Artificial)", "🧮 Método Estático Local (Contagem Numérica)"])
+    provider = "fallback" if "Estático" in engine else "gemini"
+    
+    if st.button("Analisar Base de Fato"):
+        with st.spinner("Varrendo banco de dados..."):
             try:
                 with httpx.Client(timeout=60.0) as client:
-                    res = client.post(f"{API_BASE}/sessions/{selected_id}/analyze", json={})
+                    res = client.post(f"{API_BASE}/sessions/{selected_id}/analyze", json={"provider": provider})
                     if res.status_code == 200:
                         st.success("Análise atualizada!")
                     else:

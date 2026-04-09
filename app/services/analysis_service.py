@@ -34,7 +34,10 @@ class AnalysisService:
         full_text = "\n".join(all_texts)
         prompt = f"Analise os seguintes feedbacks de uma sessão de treinamento e gere um resumo em JSON (chaves: summary, positives (lista), negatives (lista), recommendations (lista)). Feedbacks:\n{full_text}"
         
-        llm_response = await call_llm(prompt, "Você é um analista de RH. Retorne APENAS um JSON válido.")
+        if provider_param == "fallback":
+            llm_response = None
+        else:
+            llm_response = await call_llm(prompt, "Você é um analista de RH. Retorne APENAS um JSON válido.")
         
         if llm_response:
             try:

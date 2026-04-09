@@ -27,6 +27,8 @@ async def call_llm(prompt: str, system_prompt: str = "Você é um assistente út
         model = settings.default_llm_model
         if settings.default_llm_provider == "ollama":
             model = f"ollama_chat/{settings.default_llm_model}"
+        elif settings.default_llm_provider == "gemini":
+            model = f"gemini/{settings.default_llm_model}"
             
         logger.info(f"LLM Client: Attempting default ({model})")
         response = await litellm.acompletion(
@@ -49,6 +51,8 @@ async def call_llm(prompt: str, system_prompt: str = "Você é um assistente út
                 if not settings.gemini_api_key:
                     logger.warning("Gemini skipped: No API key provided in .env")
                     return None
+            elif settings.fallback_llm_provider == "ollama":
+                model = f"ollama_chat/{settings.fallback_llm_model}"
                     
             logger.info(f"LLM Client: Attempting fallback ({model})")
             response = await litellm.acompletion(
