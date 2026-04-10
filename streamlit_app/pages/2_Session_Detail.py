@@ -1,6 +1,7 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from typing import Optional
 
 from ui import (
     api_get,
@@ -18,6 +19,26 @@ from ui import (
     render_sidebar,
     status_pill,
 )
+
+
+ENGINE_OPTIONS = {
+    "Gemini": {"provider": "gemini", "label": "Gemini"},
+    "claude-3-5-haiku": {"provider": "anthropic", "label": "Claude 3.5 Haiku"},
+    "Jarvis": {"provider": "fallback", "label": "Jarvis (Fallback local)"},
+}
+
+
+def friendly_provider_name(provider: Optional[str], model: Optional[str] = None) -> str:
+    normalized = (provider or "").lower()
+    normalized_model = (model or "").lower()
+
+    if normalized == "gemini":
+        return "Gemini"
+    if normalized == "anthropic" or "claude" in normalized_model:
+        return "Claude 3.5 Haiku"
+    if normalized in {"fallback", "static_fallback", "llm_fallback_parse_error", "empty"}:
+        return "Jarvis"
+    return provider or "Auto"
 
 
 configure_page("Detalhe da sessao", "📈")
@@ -81,14 +102,15 @@ with header_cols[0]:
 with header_cols[1]:
     engine = st.radio(
         "Motor de analise",
-        options=["Gemini", "Fallback"],
+        options=list(ENGINE_OPTIONS.keys()),
+        format_func=lambda key: ENGINE_OPTIONS[key]["label"],
         horizontal=False,
     )
 with header_cols[2]:
     if st.button("Gerar analise", use_container_width=True):
         with st.spinner("Processando feedbacks da sessao..."):
             try:
-                provider = "fallback" if engine == "Fallback" else "gemini"
+                provider = ENGINE_OPTIONS[engine]["provider"]
                 api_post(f"/sessions/{selected_id}/analyze", {"provider": provider})
                 st.success("Analise atualizada com sucesso.")
                 st.rerun()
@@ -195,7 +217,7 @@ with side_col:
     if analysis:
         render_insight_card(
             "Resumo executivo",
-            f'{analysis["summary"]} Motor: {analysis.get("provider") or "auto"} | Gerado em {format_dt(analysis.get("created_at"))}',
+            f'{analysis["summary"]} Motor: {friendly_provider_name(analysis.get("provider"), analysis.get("model"))} | Gerado em {format_dt(analysis.get("created_at"))}',
         )
 
         insight_sections = [

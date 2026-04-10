@@ -15,7 +15,8 @@ Padrao adotado:
 
 - WSL com Ubuntu
 - Python 3.8+ dentro do WSL
-- Ollama opcional para IA local
+- API key do Gemini
+- API key da Anthropic para fallback cloud
 
 ## Setup rapido
 
@@ -75,14 +76,16 @@ Acesse o painel admin em `http://localhost:8501`.
 
 ## Estrategia de LLM
 
-1. Ollama local: rode `ollama pull llama3.1:8b`
-2. Gemini free tier: configure `GEMINI_API_KEY` no `.env`
-3. Regras estaticas: o sistema continua funcional sem LLM
+1. Gemini como provedor principal
+2. Anthropic como fallback cloud
+3. Regras estaticas como failsafe final
+
+Se os dois provedores cloud falharem, o sistema continua respondendo com a analise estatica local.
 
 ## Stack
 
 - Backend: FastAPI + SQLAlchemy + Alembic + SQLite
 - Frontend participante: HTML/CSS/JS
 - Dashboard admin: Streamlit
-- IA: LiteLLM com Ollama e Gemini
+- IA: LiteLLM com Gemini e Anthropic
 - PDF: FPDF2
