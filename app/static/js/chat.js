@@ -13,7 +13,8 @@ document.addEventListener("DOMContentLoaded", () => {
         sendBtn: document.getElementById('send-btn'),
         scoreBtns: document.querySelectorAll('.score-btn'),
         startBtn: document.getElementById('start-chat-btn'),
-        startContainer: document.getElementById('start-container')
+        startContainer: document.getElementById('start-container'),
+        participantName: document.getElementById('participant-name')
     };
 
     function addMessage(text, type) {
@@ -52,16 +53,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     els.startBtn.addEventListener('click', async () => {
-        els.startContainer.style.display = 'none';
+        const participantName = els.participantName ? els.participantName.value.trim() : '';
+        const startPayload = participantName
+            ? { anonymous: false, participant_name: participantName }
+            : { anonymous: true };
         
         try {
             const res = await fetch(`/api/v1/public/${token}/start`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ anonymous: true })
+                body: JSON.stringify(startPayload)
             });
             const data = await res.json();
             
+            els.startContainer.style.display = 'none';
             responseId = data.response_id;
             handleNextQuestion(data.first_question);
         } catch (e) {
@@ -111,4 +116,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         } catch (e) { console.error(e); }
     });
+
+    if (els.participantName) {
+        els.participantName.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                els.startBtn.click();
+            }
+        });
+    }
 });

@@ -45,3 +45,8 @@ body { background-color: var(--bg); color: var(--text-main); display: flex; just
 .send-btn:hover, .start-btn:hover { background: var(--primary-hover); }
 
 .start-container { display: flex; justify-content: center; align-items: center; padding: 20px; flex: 1; }
+.start-card { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--chat-bg); box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08); }
+.start-label { font-size: 0.95rem; font-weight: 600; color: var(--text-main); }
+.start-input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.95rem; color: var(--text-main); background: #fff; }
+.start-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+.start-help { font-size: 0.86rem; line-height: 1.45; color: var(--text-muted); }

@@ -23,9 +23,16 @@ async def start_response(public_token: str, data: ResponseStart, db: AsyncSessio
     session = await get_session_by_token(public_token, db)
     
     # Create participant if needed
+    participant_name = data.participant_name.strip() if data.participant_name else None
+    is_anonymous = data.anonymous or not participant_name
     participant_id = None
-    if not data.anonymous:
-        participant_id = await response_service.create_participant(db, session.id, data.participant_name, data.participant_email)
+    if not is_anonymous:
+        participant_id = await response_service.create_participant(
+            db,
+            session.id,
+            participant_name,
+            data.participant_email,
+        )
     else:
         participant_id = await response_service.create_participant(db, session.id, None, None, anonymous=True)
         
