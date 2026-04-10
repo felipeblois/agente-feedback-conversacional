@@ -1,68 +1,88 @@
-# 🎯 Agente de Feedback Conversacional — MVP
+# Agente de Feedback Conversacional - MVP
 
-Agente de feedback conversacional pós-apresentação/treinamento. Coleta notas e respostas adaptativas dos participantes, analisa com IA e gera insights.
+Agente de feedback conversacional pos-apresentacao e treinamento. Coleta notas e respostas adaptativas dos participantes, analisa com IA e gera insights operacionais.
+
+## Padrao operacional
+
+Este projeto deve ser operado pelo Ubuntu no WSL usando a virtualenv Linux em `.venv`.
+
+Padrao adotado:
+- abrir o projeto dentro do WSL
+- executar `make` e os scripts em `scripts/`
+- nao misturar PowerShell com `.venv/bin/...`
 
 ## Requisitos
 
-- Python 3.11+
-- WSL (Linux)
-- Ollama (opcional, para IA local gratuita)
+- WSL com Ubuntu
+- Python 3.8+ dentro do WSL
+- Ollama opcional para IA local
 
-## Setup rápido
+## Setup rapido
 
 ```bash
-# 1. Clonar e entrar no projeto
-git clone git@github.com:felipeblois/agente-feedback-conversacional.git
-cd agente-feedback-conversacional
-
-# 2. Setup (cria venv, instala deps, copia .env)
+cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 make setup
-
-# 3. Ativar ambiente virtual
-source .venv/bin/activate
-
-# 4. Criar banco de dados
 make db
-
-# 5. Subir a aplicação
-make run-api        # Backend (porta 8000)
-make run-streamlit   # Painel admin (porta 8501)
+scripts/doctor.sh
 ```
 
-## Uso
+## Operacao diaria
 
-### Criar uma sessão
-Acesse o Swagger UI em http://localhost:8000/docs e crie uma sessão via POST /api/v1/sessions.
+```bash
+cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
+
+# diagnostico do ambiente
+scripts/doctor.sh
+
+# backend
+scripts/run_api.sh
+
+# streamlit
+scripts/run_streamlit.sh
+
+# stack completa
+scripts/run_all.sh
+
+# testes
+scripts/test.sh
+```
+
+## Fluxo de uso
+
+### Criar uma sessao
+Acesse o Swagger UI em `http://localhost:8000/docs` e crie uma sessao via `POST /api/v1/sessions`.
 
 ### Coletar feedbacks
-Compartilhe o link público (`http://localhost:8000/f/{token}`) com os participantes.
+Compartilhe o link publico `http://localhost:8000/f/{token}` com os participantes.
 
 ### Visualizar resultados
-Acesse o painel admin em http://localhost:8501.
+Acesse o painel admin em `http://localhost:8501`.
 
-## Comandos disponíveis
+## Comandos disponiveis
 
-| Comando | Descrição |
+| Comando | Descricao |
 |---|---|
-| `make setup` | Cria venv e instala dependências |
-| `make db` | Inicializa/atualiza banco de dados |
+| `make setup` | Cria venv e instala dependencias |
+| `make db` | Inicializa ou atualiza o banco |
 | `make run-api` | Sobe o backend FastAPI |
 | `make run-streamlit` | Sobe o painel admin |
-| `make run` | Sobe tudo (backend + admin) |
+| `make run` | Sobe backend e admin em background |
 | `make test` | Roda os testes |
 | `make seed` | Popula com dados de exemplo |
-| `make clean` | Limpa banco e cache |
+| `scripts/doctor.sh` | Valida o ambiente WSL e a venv |
+| `scripts/run_all.sh` | Sobe API e Streamlit no mesmo terminal |
+| `scripts/test.sh` | Executa os testes pela venv Linux |
 
-## Estratégia de LLM (custo zero)
+## Estrategia de LLM
 
-1. **Ollama local** (preferencial): instale [Ollama](https://ollama.ai) e rode `ollama pull llama3.1:8b`
-2. **Gemini Free Tier** (fallback): crie uma API key gratuita em https://aistudio.google.com/apikey
-3. **Regras estáticas** (failsafe): funciona sem nenhum LLM configurado
+1. Ollama local: rode `ollama pull llama3.1:8b`
+2. Gemini free tier: configure `GEMINI_API_KEY` no `.env`
+3. Regras estaticas: o sistema continua funcional sem LLM
 
 ## Stack
 
-- **Backend:** FastAPI + SQLAlchemy + Alembic + SQLite
-- **Frontend participante:** HTML/CSS/JS (chat conversacional)
-- **Dashboard admin:** Streamlit
-- **IA:** LiteLLM (Ollama + Gemini)
-- **PDF:** FPDF2
+- Backend: FastAPI + SQLAlchemy + Alembic + SQLite
+- Frontend participante: HTML/CSS/JS
+- Dashboard admin: Streamlit
+- IA: LiteLLM com Ollama e Gemini
+- PDF: FPDF2
