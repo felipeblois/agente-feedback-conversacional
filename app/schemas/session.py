@@ -1,6 +1,8 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
+
+from pydantic import BaseModel
+
 
 class SessionBase(BaseModel):
     title: str
@@ -10,8 +12,10 @@ class SessionBase(BaseModel):
     max_followup_questions: int = 3
     status: str = "active"
 
+
 class SessionCreate(SessionBase):
     pass
+
 
 class SessionUpdate(BaseModel):
     title: Optional[str] = None
@@ -21,14 +25,54 @@ class SessionUpdate(BaseModel):
     max_followup_questions: Optional[int] = None
     status: Optional[str] = None
 
+
 class SessionResponse(SessionBase):
     id: int
     public_token: str
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
+
 class SessionListResponse(SessionResponse):
-    pass
+    response_count: int = 0
+    completed_response_count: int = 0
+    completion_rate: float = 0.0
+    avg_score: Optional[float] = None
+    analysis_count: int = 0
+    last_analysis_at: Optional[datetime] = None
+
+
+class DashboardSummaryResponse(BaseModel):
+    total_sessions: int
+    total_responses: int
+    average_completion_rate: float
+    analyses_completed: int
+    last_analysis_at: Optional[datetime] = None
+    active_sessions: int
+    completed_responses: int
+    recent_sessions: List[SessionListResponse]
+
+
+class ScoreDistributionItem(BaseModel):
+    score: int
+    count: int
+
+
+class RecentResponseItem(BaseModel):
+    response_id: int
+    participant_label: str
+    score: Optional[int] = None
+    status: str
+    latest_message: Optional[str] = None
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+
+
+class SessionDetailResponse(SessionListResponse):
+    latest_analysis_summary: Optional[str] = None
+    public_url: str
+    score_distribution: List[ScoreDistributionItem]
+    recent_responses: List[RecentResponseItem]

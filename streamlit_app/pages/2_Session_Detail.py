@@ -1,90 +1,217 @@
-import streamlit as st
-import httpx
-import plotly.express as px
 import pandas as pd
+import plotly.express as px
+import streamlit as st
 
-st.set_page_config(page_title="Detalhes da Sessão", page_icon="📊", layout="wide")
+from ui import (
+    api_get,
+    api_get_bytes,
+    api_post,
+    clipboard_button,
+    configure_page,
+    empty_state,
+    format_dt,
+    format_pct,
+    format_score,
+    panel_header,
+    render_insight_card,
+    render_kpi_card,
+    render_sidebar,
+    status_pill,
+)
 
-API_BASE = "http://localhost:8000/api/v1"
 
-st.title("Detalhes da Sessão")
+configure_page("Detalhe da sessao", "📈")
+render_sidebar("detail")
+
+panel_header(
+    "Insight center",
+    "Detalhe da sessao",
+    "Acompanhe desempenho da coleta, gere analise e exporte o material sem sair do painel.",
+)
 
 try:
-    with httpx.Client() as client:
-        res = client.get(f"{API_BASE}/sessions")
-        sessions = res.json()
-except:
-    sessions = []
-    
-if not sessions:
-    st.warning("Nenhuma sessão encontrada. Vá para a página de Sessões.")
+    sessions = api_get("/sessions")
+except Exception as exc:
+    st.error(f"Nao foi possivel carregar as sessoes: {exc}")
     st.stop()
 
-session_opts = {s["id"]: s["title"] for s in sessions}
-selected_id = st.selectbox("Selecione uma sessão", options=list(session_opts.keys()), format_func=lambda x: session_opts[x])
+if not sessions:
+    empty_state(
+        "Nenhuma sessao encontrada",
+        "Crie uma sessao antes de abrir a tela de detalhe.",
+    )
+    st.stop()
 
+session_ids = [session["id"] for session in sessions]
+default_session_id = st.session_state.get("selected_session_id", session_ids[0])
+if default_session_id not in session_ids:
+    default_session_id = session_ids[0]
 
-st.divider()
+selected_id = st.selectbox(
+    "Selecione a sessao",
+    options=session_ids,
+    index=session_ids.index(default_session_id),
+    format_func=lambda session_id: next(item["title"] for item in sessions if item["id"] == session_id),
+)
+st.session_state["selected_session_id"] = selected_id
 
-col1, col2 = st.columns([2, 1])
+try:
+    detail = api_get(f"/sessions/{selected_id}/detail")
+except Exception as exc:
+    st.error(f"Nao foi possivel carregar o detalhe da sessao: {exc}")
+    st.stop()
 
-with col1:
-    st.subheader("Análise de Feedbacks")
-    
-    engine = st.radio("Selecione o Motor de Análise", options=["🤖 Google Gemini 2.5 (Inteligência Artificial)", "🧮 Método Estático Local (Contagem Numérica)"])
-    provider = "fallback" if "Estático" in engine else "gemini"
-    
-    if st.button("Analisar Base de Fato"):
-        with st.spinner("Varrendo banco de dados..."):
-            try:
-                with httpx.Client(timeout=60.0) as client:
-                    res = client.post(f"{API_BASE}/sessions/{selected_id}/analyze", json={"provider": provider})
-                    if res.status_code == 200:
-                        st.success("Análise atualizada!")
-                    else:
-                        st.error(f"Erro: {res.text}")
-            except Exception as e:
-                st.error(f"Falha na requisição: {e}")
-                
-    # Fetch Analysis
+try:
+    analysis = api_get(f"/sessions/{selected_id}/analysis")
+except Exception:
     analysis = None
-    try:
-        with httpx.Client() as client:
-            res = client.get(f"{API_BASE}/sessions/{selected_id}/analysis")
-            if res.status_code == 200:
-                analysis = res.json()
-    except:
-        pass
-        
-    if analysis:
-        avg = analysis.get("avg_score")
-        if avg:
-            st.metric("Score Médio", f"{avg:.2f}")
-        
-        st.write("### Resumo Executivo")
-        st.write(analysis["summary"])
-        
-        st.write("### Top Temas Positivos")
-        for t in analysis.get("top_positive_themes", []):
-            st.markdown(f"- {t}")
-            
-        st.write("### Top Temas Negativos")
-        for t in analysis.get("top_negative_themes", []):
-            st.markdown(f"- {t}")
 
-with col2:
-    st.subheader("Exportações")
-    try:
-        with httpx.Client() as client:
-            # Download CSV
-            csv_res = client.get(f"{API_BASE}/sessions/{selected_id}/export/csv")
-            if csv_res.status_code == 200:
-                st.download_button("Baixar Dados (CSV)", data=csv_res.content, file_name=f"session_{selected_id}.csv", mime="text/csv")
+header_cols = st.columns([3.3, 1.15, 1.15, 1.2])
+with header_cols[0]:
+    st.markdown(
+        f"""
+        <div class="panel-card">
+            <div class="section-title">{detail['title']}</div>
+            <p class="section-copy">{detail.get('description') or 'Sem descricao cadastrada.'}</p>
+            <p class="section-copy">{status_pill(detail["status"])} <span style="margin-left:10px;color:#a6acc9;">Link publico ativo</span></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with header_cols[1]:
+    engine = st.radio(
+        "Motor de analise",
+        options=["Gemini", "Fallback"],
+        horizontal=False,
+    )
+with header_cols[2]:
+    if st.button("Gerar analise", use_container_width=True):
+        with st.spinner("Processando feedbacks da sessao..."):
+            try:
+                provider = "fallback" if engine == "Fallback" else "gemini"
+                api_post(f"/sessions/{selected_id}/analyze", {"provider": provider})
+                st.success("Analise atualizada com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Falha ao gerar analise: {exc}")
+with header_cols[3]:
+    clipboard_button("Copiar link publico", detail["public_url"], f"copy-{selected_id}")
+
+with st.expander("Link publico e exportacoes", expanded=False):
+    st.code(detail["public_url"])
+    export_cols = st.columns(2)
+    with export_cols[0]:
+        try:
+            csv_bytes = api_get_bytes(f"/sessions/{selected_id}/export/csv")
+        except Exception:
+            csv_bytes = None
+        if csv_bytes:
+            st.download_button(
+                "Exportar CSV",
+                data=csv_bytes,
+                file_name=f"session_{selected_id}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        else:
+            st.info("Sem respostas para exportar em CSV.")
+    with export_cols[1]:
+        try:
+            pdf_bytes = api_get_bytes(f"/sessions/{selected_id}/export/pdf")
+        except Exception:
+            pdf_bytes = None
+        if pdf_bytes:
+            st.download_button(
+                "Exportar PDF",
+                data=pdf_bytes,
+                file_name=f"session_{selected_id}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        else:
+            st.info("Gere uma analise antes de exportar em PDF.")
+
+kpi_cols = st.columns(4)
+with kpi_cols[0]:
+    render_kpi_card("💬", "Respostas", str(detail["response_count"]), "Total recebido", "teal")
+with kpi_cols[1]:
+    render_kpi_card("✓", "Concluidas", str(detail["completed_response_count"]), "Fluxos finalizados", "blue")
+with kpi_cols[2]:
+    render_kpi_card("◔", "Conclusao", format_pct(detail["completion_rate"]), "Conversas encerradas", "gold")
+with kpi_cols[3]:
+    render_kpi_card("★", "Score medio", format_score(detail.get("avg_score")), "Media das notas", "purple")
+
+main_col, side_col = st.columns([1.5, 1])
+
+with main_col:
+    st.markdown("### Distribuicao de notas")
+    distribution = detail.get("score_distribution", [])
+    if distribution:
+        chart_df = pd.DataFrame(distribution)
+        fig = px.bar(
+            chart_df,
+            x="score",
+            y="count",
+            text="count",
+            template="plotly_dark",
+            color_discrete_sequence=["#4f7cff"],
+        )
+        fig.update_layout(
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=10, r=10, t=10, b=10),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        empty_state(
+            "Sem notas registradas",
+            "Compartilhe o link publico para iniciar a coleta e preencher a distribuicao.",
+        )
+
+    st.markdown("### Respostas recentes")
+    recent_responses = detail.get("recent_responses", [])
+    if recent_responses:
+        response_df = pd.DataFrame(
+            [
+                {
+                    "Participante": item["participant_label"],
+                    "Score": item["score"] if item["score"] is not None else "-",
+                    "Status": item["status"].title(),
+                    "Ultima mensagem": item["latest_message"] or "Sem resposta textual ainda",
+                    "Inicio": format_dt(item["started_at"]),
+                }
+                for item in recent_responses
+            ]
+        )
+        st.dataframe(response_df, use_container_width=True, hide_index=True)
+    else:
+        empty_state(
+            "Nenhuma resposta recebida",
+            "Assim que os participantes responderem, a lista recente aparecera aqui.",
+        )
+
+with side_col:
+    st.markdown("### Insights")
+    if analysis:
+        render_insight_card(
+            "Resumo executivo",
+            f'{analysis["summary"]} Motor: {analysis.get("provider") or "auto"} | Gerado em {format_dt(analysis.get("created_at"))}',
+        )
+
+        insight_sections = [
+            ("Temas positivos", analysis.get("top_positive_themes", [])),
+            ("Temas negativos", analysis.get("top_negative_themes", [])),
+            ("Principais elogios", analysis.get("positives", [])),
+            ("Principais criticas", analysis.get("negatives", [])),
+            ("Recomendacoes", analysis.get("recommendations", [])),
+        ]
+        for title, items in insight_sections:
+            if items:
+                render_insight_card(title, " • ".join(str(item) for item in items))
             else:
-                st.info("Nenhuma resposta para baixar.")
-                
-            pdf_res = client.get(f"{API_BASE}/sessions/{selected_id}/export/pdf")
-            if pdf_res.status_code == 200:
-                st.download_button("Baixar Resumo (PDF)", data=pdf_res.content, file_name=f"report_session_{selected_id}.pdf", mime="application/pdf")
-    except Exception as e:
-        st.error("Serviço offline.")
+                render_insight_card(title, "Nenhum item disponivel no momento.")
+    else:
+        empty_state(
+            "Analise ainda nao gerada",
+            "Use o botao de analise para produzir o resumo executivo e os temas principais desta sessao.",
+        )
