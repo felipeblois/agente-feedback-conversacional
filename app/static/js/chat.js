@@ -88,14 +88,18 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const res = await fetch(`/api/v1/public/${token}/score`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ response_id: responseId, score }),
-                });
-                const data = await res.json();
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ response_id: responseId, score }),
+            });
+            const data = await res.json();
+            if (data.conversation_finished) {
+                handleNextQuestion(null);
+            } else {
                 handleNextQuestion(data.next_question);
-            } catch (error) {
-                console.error(error);
             }
+        } catch (error) {
+            console.error(error);
+        }
         });
     });
 

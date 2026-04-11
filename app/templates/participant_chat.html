@@ -21,15 +21,9 @@
         <div id="score-input-container" class="input-container" style="display: none;">
             <p class="input-instruction">Selecione uma nota:</p>
             <div class="score-buttons" id="score-buttons">
-                {% if session.score_type == "nps" or session.score_type == "usefulness" %}
-                    {% for i in range(0, 11) %}
-                        <button class="score-btn" data-score="{{ i }}">{{ i }}</button>
-                    {% endfor %}
-                {% else %}
-                    {% for i in range(1, 6) %}
-                        <button class="score-btn" data-score="{{ i }}">{{ i }}</button>
-                    {% endfor %}
-                {% endif %}
+                {% for i in range(0, 11) %}
+                    <button class="score-btn" data-score="{{ i }}">{{ i }}</button>
+                {% endfor %}
             </div>
         </div>
 

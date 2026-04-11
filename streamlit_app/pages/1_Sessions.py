@@ -15,6 +15,15 @@ from ui import (
 )
 
 
+FEEDBACK_TYPE_OPTIONS = [
+    "treinamento",
+    "palestra",
+    "cast",
+    "workshop",
+    "onboarding",
+]
+
+
 configure_page("Sessoes", "🗂️")
 render_sidebar("sessions")
 
@@ -92,12 +101,33 @@ with list_col:
 
 with form_col:
     st.markdown("### Criar sessao")
-    st.caption("Novo link publico para sua proxima coleta.")
+    st.caption("Novo link publico para sua proxima coleta com briefing estruturado para a IA.")
     with st.form("new_session_form", clear_on_submit=True):
         title = st.text_input("Titulo")
         desc = st.text_area("Descricao")
-        score_type = st.selectbox("Tipo de nota", ["nps", "csat", "usefulness"])
-        max_followups = st.slider("Perguntas de aprofundamento", min_value=1, max_value=5, value=3)
+        score_type = st.selectbox(
+            "Tipo de feedback",
+            FEEDBACK_TYPE_OPTIONS,
+            format_func=lambda value: value.replace("_", " ").title(),
+        )
+        theme_summary = st.text_input("Tema principal")
+        session_goal = st.text_area(
+            "Objetivo da sessao",
+            help="Explique o que voce quer validar ou aprender com os feedbacks.",
+        )
+        target_audience = st.text_input("Publico-alvo")
+        topics_to_explore = st.text_area(
+            "Topicos para explorar",
+            help="Liste os assuntos que a IA deve priorizar ao aprofundar a conversa.",
+        )
+        ai_guidance = st.text_area(
+            "Orientacoes extras para IA",
+            help="Exemplo: evitar perguntas longas, focar em aplicabilidade pratica, explorar exemplos reais.",
+        )
+        max_followups = st.slider("Perguntas de aprofundamento", min_value=1, max_value=20, value=3)
+        st.caption(
+            "Esse limite define o maximo de perguntas abertas que a IA pode fazer ao participante."
+        )
         submitted = st.form_submit_button("Criar sessao", use_container_width=True)
         if submitted:
             if not title.strip():
@@ -110,6 +140,11 @@ with form_col:
                             "title": title,
                             "description": desc,
                             "score_type": score_type,
+                            "theme_summary": theme_summary,
+                            "session_goal": session_goal,
+                            "target_audience": target_audience,
+                            "topics_to_explore": topics_to_explore,
+                            "ai_guidance": ai_guidance,
                             "is_anonymous": True,
                             "max_followup_questions": max_followups,
                         },

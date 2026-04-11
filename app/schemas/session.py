@@ -7,7 +7,12 @@ from pydantic import BaseModel
 class SessionBase(BaseModel):
     title: str
     description: Optional[str] = None
-    score_type: str = "nps"
+    score_type: str = "treinamento"
+    theme_summary: Optional[str] = None
+    session_goal: Optional[str] = None
+    target_audience: Optional[str] = None
+    topics_to_explore: Optional[str] = None
+    ai_guidance: Optional[str] = None
     is_anonymous: bool = True
     max_followup_questions: int = 3
     status: str = "active"
@@ -21,6 +26,11 @@ class SessionUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     score_type: Optional[str] = None
+    theme_summary: Optional[str] = None
+    session_goal: Optional[str] = None
+    target_audience: Optional[str] = None
+    topics_to_explore: Optional[str] = None
+    ai_guidance: Optional[str] = None
     is_anonymous: Optional[bool] = None
     max_followup_questions: Optional[int] = None
     status: Optional[str] = None

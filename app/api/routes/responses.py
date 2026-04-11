@@ -53,8 +53,11 @@ async def submit_score(public_token: str, data: ScoreSubmit, db: AsyncSession = 
     
     # Get next question based on score
     next_question = await conversation_service.get_next_question(db, data.response_id, session.max_followup_questions)
-    
-    return ScoreResponse(next_question=next_question)
+    if next_question:
+        return ScoreResponse(next_question=next_question, conversation_finished=False)
+
+    await response_service.mark_completed(db, data.response_id)
+    return ScoreResponse(conversation_finished=True)
 
 @router.post("/{public_token}/message", response_model=MessageResponse)
 async def submit_message(public_token: str, data: MessageSubmit, db: AsyncSession = Depends(get_db_session)):

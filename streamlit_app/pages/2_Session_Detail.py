@@ -192,6 +192,25 @@ with st.expander("Link publico e exportacoes", expanded=False):
         else:
             st.info("Gere uma analise antes de exportar em PDF.")
 
+with st.expander("Briefing da IA", expanded=False):
+    st.markdown(
+        f"""
+        <div class="panel-card">
+            <div class="section-title">Tema principal</div>
+            <p class="section-copy">{detail.get("theme_summary") or "Nao informado"}</p>
+            <div class="section-title" style="margin-top:1rem;">Objetivo da sessao</div>
+            <p class="section-copy">{detail.get("session_goal") or "Nao informado"}</p>
+            <div class="section-title" style="margin-top:1rem;">Publico-alvo</div>
+            <p class="section-copy">{detail.get("target_audience") or "Nao informado"}</p>
+            <div class="section-title" style="margin-top:1rem;">Topicos para explorar</div>
+            <p class="section-copy">{detail.get("topics_to_explore") or "Nao informado"}</p>
+            <div class="section-title" style="margin-top:1rem;">Orientacoes extras para IA</div>
+            <p class="section-copy">{detail.get("ai_guidance") or "Nao informado"}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 kpi_cols = st.columns(4)
 with kpi_cols[0]:
     render_kpi_card("💬", "Respostas", str(detail["response_count"]), "Total recebido", "teal")

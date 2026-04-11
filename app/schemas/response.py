@@ -20,7 +20,8 @@ class ScoreSubmit(BaseModel):
     score: int
 
 class ScoreResponse(BaseModel):
-    next_question: QuestionDetail
+    next_question: Optional[QuestionDetail] = None
+    conversation_finished: bool = False
 
 class MessageSubmit(BaseModel):
     response_id: int

@@ -156,7 +156,9 @@ with side_col:
             <div class="section-title">Contexto</div>
             <p class="section-copy">Criada em {format_dt(detail.get("created_at"))}</p>
             <p class="section-copy">Ultima analise em {format_dt(detail.get("last_analysis_at"))}</p>
-            <p class="section-copy">Tipo de nota {str(detail.get("score_type", "")).upper()}</p>
+            <p class="section-copy">Tipo de feedback {str(detail.get("score_type", "")).replace("_", " ").title()}</p>
+            <p class="section-copy">Tema principal {detail.get("theme_summary") or "Nao informado"}</p>
+            <p class="section-copy">Objetivo {detail.get("session_goal") or "Nao informado"}</p>
         </div>
         """,
         unsafe_allow_html=True,

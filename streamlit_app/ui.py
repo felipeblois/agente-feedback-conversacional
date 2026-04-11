@@ -646,7 +646,7 @@ def render_sessions_table(rows: Iterable[Dict[str, Any]]) -> None:
                     <div class="row-sub">{html.escape(row.get("description") or "Sem descricao cadastrada")}</div>
                 </div>
                 <div>
-                    <div class="row-title">{html.escape(str(row["score_type"]).upper())}</div>
+                    <div class="row-title">{html.escape(str(row["score_type"]).replace("_", " ").title())}</div>
                     <div class="row-sub">{html.escape(format_score(row.get("avg_score")))} score medio</div>
                 </div>
                 <div>
