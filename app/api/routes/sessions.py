@@ -24,8 +24,27 @@ async def get_dashboard_summary(db: AsyncSession = Depends(get_db_session)):
     return await session_service.get_dashboard_summary(db)
 
 @router.get("", response_model=List[SessionListResponse])
-async def list_sessions(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
-    return await session_service.get_multi(db, skip=skip, limit=limit)
+async def list_sessions(
+    skip: int = 0,
+    limit: int = 100,
+    status: str = "active",
+    db: AsyncSession = Depends(get_db_session),
+):
+    return await session_service.get_multi(db, skip=skip, limit=limit, status=status)
+
+@router.post("/{session_id}/archive", response_model=SessionResponse)
+async def archive_session(session_id: int, db: AsyncSession = Depends(get_db_session)):
+    session = await session_service.archive(db, id=session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+@router.post("/{session_id}/reactivate", response_model=SessionResponse)
+async def reactivate_session(session_id: int, db: AsyncSession = Depends(get_db_session)):
+    session = await session_service.reactivate(db, id=session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
 
 @router.get("/{session_id}/detail", response_model=SessionDetailResponse)
 async def get_session_detail(session_id: int, db: AsyncSession = Depends(get_db_session)):
@@ -54,4 +73,4 @@ async def delete_session(session_id: int, db: AsyncSession = Depends(get_db_sess
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     await session_service.remove(db, id=session_id)
-    return {"status": "archived/deleted"}
+    return {"status": "deleted"}

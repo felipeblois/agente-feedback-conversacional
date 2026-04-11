@@ -40,7 +40,7 @@ except Exception as exc:
 recent_sessions = summary.get("recent_sessions", [])
 if not recent_sessions:
     empty_state(
-        "Nenhuma sessao criada ainda",
+        "Nenhuma sessao ativa criada ainda",
         "Crie sua primeira sessao para acompanhar respostas, taxa de conclusao e insights no dashboard.",
     )
     if st.button("Criar sessao agora"):
@@ -62,10 +62,10 @@ with kpi_cols[2]:
     )
 with kpi_cols[3]:
     render_kpi_card(
-        "📈",
-        "Ultima analise",
-        "Hoje" if summary.get("last_analysis_at") else "-",
-        format_dt(summary.get("last_analysis_at")),
+        "🗃",
+        "Arquivadas",
+        str(summary["archived_sessions"]),
+        format_dt(summary.get("last_analysis_at")) if summary.get("last_analysis_at") else "Sem analise recente",
         "purple",
     )
 
@@ -80,6 +80,7 @@ with left:
     info_list(
         [
             ("Sessoes ativas", f"{summary['active_sessions']} sessoes em andamento"),
+            ("Sessoes arquivadas", f"{summary['archived_sessions']} sessoes preservadas"),
             ("Maior volume", f"{top_session['title']} com {top_session['response_count']} respostas"),
             ("Melhor conclusao", f"{best_completion['title']} com {format_pct(best_completion['completion_rate'])}"),
             ("Ultima leitura", f"Analise mais recente em {format_dt(summary.get('last_analysis_at'))}"),
@@ -90,7 +91,7 @@ with right:
     st.markdown("### Atalhos rapidos")
     render_quick_tiles(
         [
-            {"icon": "＋", "title": "Nova Sessao", "copy": "Abra uma coleta e gere novo link publico."},
+            {"icon": "+", "title": "Nova Sessao", "copy": "Abra uma coleta e gere novo link publico."},
             {"icon": "▥", "title": "Ver Ultimo Detalhe", "copy": "Continue da sessao mais recente com um clique."},
         ]
     )

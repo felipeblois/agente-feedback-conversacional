@@ -2,7 +2,6 @@ import pandas as pd
 import streamlit as st
 
 from ui import (
-    api_delete,
     api_get,
     api_post,
     configure_page,
@@ -35,10 +34,7 @@ top_cols = st.columns([1, 1, 1, 1])
 top_cols[0].metric("Sessoes", len(sessions))
 top_cols[1].metric("Ativas", sum(1 for item in sessions if item["status"] == "active"))
 top_cols[2].metric("Respostas", sum(item["response_count"] for item in sessions))
-top_cols[3].metric(
-    "Analises",
-    sum(item["analysis_count"] for item in sessions),
-)
+top_cols[3].metric("Analises", sum(item["analysis_count"] for item in sessions))
 
 list_col, form_col = st.columns([1.5, 1])
 
@@ -88,7 +84,7 @@ with list_col:
             with action_cols[3]:
                 if st.button("Arquivar", key=f"archive-{session['id']}", use_container_width=True):
                     try:
-                        api_delete(f"/sessions/{session['id']}")
+                        api_post(f"/sessions/{session['id']}/archive")
                         st.success("Sessao arquivada com sucesso.")
                         st.rerun()
                     except Exception as exc:

@@ -52,6 +52,7 @@ class DashboardSummaryResponse(BaseModel):
     analyses_completed: int
     last_analysis_at: Optional[datetime] = None
     active_sessions: int
+    archived_sessions: int
     completed_responses: int
     recent_sessions: List[SessionListResponse]
 

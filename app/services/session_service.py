@@ -26,14 +26,26 @@ class SessionService:
         result = await db.execute(select(Session).where(Session.id == id))
         return result.scalar_one_or_none()
 
-    async def get_multi(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
-        stmt = select(Session).order_by(Session.created_at.desc()).offset(skip).limit(limit)
+    async def get_multi(
+        self,
+        db: AsyncSession,
+        skip: int = 0,
+        limit: int = 100,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        stmt = select(Session)
+        if status:
+            stmt = stmt.where(Session.status == status)
+        stmt = stmt.order_by(Session.created_at.desc()).offset(skip).limit(limit)
         result = await db.execute(stmt)
         sessions = list(result.scalars().all())
         return await self._build_session_cards(db, sessions)
 
     async def get_dashboard_summary(self, db: AsyncSession) -> Dict[str, Any]:
         total_sessions = await db.scalar(select(func.count(Session.id))) or 0
+        archived_sessions = await db.scalar(
+            select(func.count(Session.id)).where(Session.status == "archived")
+        ) or 0
         total_responses = await db.scalar(select(func.count(Response.id))) or 0
         completed_responses = await db.scalar(
             select(func.count(Response.id)).where(Response.status == "completed")
@@ -54,8 +66,9 @@ class SessionService:
             "analyses_completed": analyses_completed,
             "last_analysis_at": last_analysis_at,
             "active_sessions": active_sessions,
+            "archived_sessions": archived_sessions,
             "completed_responses": completed_responses,
-            "recent_sessions": await self.get_multi(db, skip=0, limit=5),
+            "recent_sessions": await self.get_multi(db, skip=0, limit=5, status="active"),
         }
 
     async def get_detail(self, db: AsyncSession, session_id: int) -> Optional[Dict[str, Any]]:
@@ -139,6 +152,26 @@ class SessionService:
         if db_obj:
             await db.delete(db_obj)
             await db.commit()
+
+    async def archive(self, db: AsyncSession, id: int) -> Optional[Session]:
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            return None
+        db_obj.status = "archived"
+        db.add(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
+        return db_obj
+
+    async def reactivate(self, db: AsyncSession, id: int) -> Optional[Session]:
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            return None
+        db_obj.status = "active"
+        db.add(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
+        return db_obj
 
     async def _build_session_cards(
         self, db: AsyncSession, sessions: List[Session]

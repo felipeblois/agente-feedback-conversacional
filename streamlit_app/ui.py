@@ -513,6 +513,8 @@ def status_pill(status: str) -> str:
         css_class = "active"
     elif normalized == "completed":
         css_class = "completed"
+    elif normalized == "archived":
+        css_class = "warning"
     return f'<span class="status-pill {css_class}">{html.escape(status.title())}</span>'
 
 
@@ -881,3 +883,32 @@ def render_insight_card(title: str, body: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_sidebar(current_page: str) -> None:
+    st.sidebar.markdown("## Implantar")
+    nav_items = [
+        ("dashboard", "Dashboard", "◧", "Home.py"),
+        ("sessions", "Sessoes", "🗂", "pages/1_Sessions.py"),
+        ("detail", "Analises", "📊", "pages/2_Session_Detail.py"),
+        ("archived", "Arquivadas", "🗃", "pages/4_Archived_Sessions.py"),
+        ("settings", "Configuracoes", "⚙", "pages/3_Settings.py"),
+    ]
+    for key, label, icon, page in nav_items:
+        if key == current_page:
+            st.sidebar.markdown(f"### {icon} {label}")
+        elif st.sidebar.button(f"{icon}  {label}", key=f"nav-{key}", use_container_width=True):
+            st.switch_page(page)
+
+    st.sidebar.markdown("")
+    st.sidebar.markdown(
+        """
+        <div class="sidebar-block">
+            <div class="sidebar-title">Workspace local</div>
+            <div class="sidebar-copy">Painel administrativo do agente com operacao em FastAPI, Streamlit e SQLite.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown("---")
+    st.sidebar.caption("⚙ Configuracoes em breve")
