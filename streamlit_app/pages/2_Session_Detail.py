@@ -4,6 +4,7 @@ import streamlit as st
 from typing import Optional
 
 from ui import (
+    api_delete,
     api_get,
     api_get_bytes,
     api_post,
@@ -87,6 +88,10 @@ try:
 except Exception:
     analysis = None
 
+confirm_delete_key = f"confirm_delete_{selected_id}"
+if confirm_delete_key not in st.session_state:
+    st.session_state[confirm_delete_key] = False
+
 header_cols = st.columns([3.3, 1.15, 1.15, 1.2])
 with header_cols[0]:
     st.markdown(
@@ -118,6 +123,40 @@ with header_cols[2]:
                 st.error(f"Falha ao gerar analise: {exc}")
 with header_cols[3]:
     clipboard_button("Copiar link publico", detail["public_url"], f"copy-{selected_id}")
+
+danger_col, spacer_col = st.columns([1.2, 3.8])
+with danger_col:
+    if not st.session_state[confirm_delete_key]:
+        if st.button("Excluir sessao", use_container_width=True):
+            st.session_state[confirm_delete_key] = True
+            st.rerun()
+
+if st.session_state[confirm_delete_key]:
+    st.warning("Essa acao remove a sessao, respostas, analises e exportacoes associadas.")
+    confirm_cols = st.columns([1, 1, 3])
+    with confirm_cols[0]:
+        if st.button("Confirmar exclusao", use_container_width=True):
+            try:
+                current_index = session_ids.index(selected_id)
+                api_delete(f"/sessions/{selected_id}")
+                st.session_state[confirm_delete_key] = False
+                remaining_ids = [session_id for session_id in session_ids if session_id != selected_id]
+
+                if remaining_ids:
+                    if current_index < len(remaining_ids):
+                        st.session_state["selected_session_id"] = remaining_ids[current_index]
+                    else:
+                        st.session_state["selected_session_id"] = remaining_ids[-1]
+                else:
+                    st.session_state.pop("selected_session_id", None)
+                st.success("Sessao excluida com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nao foi possivel excluir a sessao: {exc}")
+    with confirm_cols[1]:
+        if st.button("Cancelar", use_container_width=True):
+            st.session_state[confirm_delete_key] = False
+            st.rerun()
 
 with st.expander("Link publico e exportacoes", expanded=False):
     st.code(detail["public_url"])
