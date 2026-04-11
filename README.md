@@ -59,6 +59,13 @@ Compartilhe o link publico `http://localhost:8000/f/{token}` com os participante
 ### Visualizar resultados
 Acesse o painel admin em `http://localhost:8501`.
 
+### Configurar credenciais da instancia
+Use a pagina `Configuracoes` no painel para definir se a instancia usa:
+- credenciais do cliente
+- credenciais da plataforma
+
+O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
+
 ## Comandos disponiveis
 
 | Comando | Descricao |
@@ -81,6 +88,13 @@ Acesse o painel admin em `http://localhost:8501`.
 3. Regras estaticas como failsafe final
 
 Se os dois provedores cloud falharem, o sistema continua respondendo com a analise estatica local.
+
+## Modelo comercial
+
+- Instancia dedicada por cliente
+- O cliente pode salvar suas proprias credenciais no painel
+- Se preferir, a instancia pode usar as credenciais da plataforma
+- O fallback estatico Jarvis continua disponivel como failsafe
 
 ## Stack
 

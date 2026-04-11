@@ -436,9 +436,10 @@ def inject_theme() -> None:
 def render_sidebar(current_page: str) -> None:
     st.sidebar.markdown("## Implantar")
     nav_items = [
-        ("dashboard", "Dashboard", "◧", "streamlit_app/Home.py"),
+        ("dashboard", "Dashboard", "◧", "Home.py"),
         ("sessions", "Sessoes", "🗂", "pages/1_Sessions.py"),
         ("detail", "Analises", "📊", "pages/2_Session_Detail.py"),
+        ("settings", "Configuracoes", "⚙", "pages/3_Settings.py"),
     ]
     for key, label, icon, page in nav_items:
         if key == current_page:
@@ -554,6 +555,13 @@ def api_get(path: str) -> Any:
 def api_post(path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
     with httpx.Client(timeout=60.0) as client:
         response = client.post(f"{API_BASE}{path}", json=payload or {})
+        response.raise_for_status()
+        return response.json()
+
+
+def api_put(path: str, payload: Dict[str, Any]) -> Any:
+    with httpx.Client(timeout=60.0) as client:
+        response = client.put(f"{API_BASE}{path}", json=payload)
         response.raise_for_status()
         return response.json()
 

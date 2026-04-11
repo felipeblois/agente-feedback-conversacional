@@ -52,8 +52,11 @@ class AnalysisService:
             llm_response = None
         else:
             llm_response = await call_llm(
+                db,
                 prompt,
                 "Voce e um analista de RH. Retorne APENAS um JSON valido.",
+                provider_override=provider_param if provider_param in {"gemini", "anthropic", "openai"} else None,
+                model_override=model_param,
             )
 
         if llm_response:
@@ -67,6 +70,9 @@ class AnalysisService:
                 data = llm_fallback.summarize(all_texts)
                 provider_used = "llm_fallback_parse_error"
         else:
+            logger.warning(
+                f"Analysis fallback engaged | session_id={session_id} | provider=jarvis | reason=cloud_llm_unavailable"
+            )
             data = llm_fallback.summarize(all_texts)
             provider_used = "static_fallback"
 

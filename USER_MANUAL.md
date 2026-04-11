@@ -16,6 +16,11 @@ O ecossistema e dividido em tres partes:
 - Compartilhe o link publico `http://localhost:8000/f/{token}`
 - Acompanhe respostas, conclusao e analises no dashboard
 
+### Configuracoes
+- Escolha entre credenciais do cliente e credenciais da plataforma
+- Salve Gemini e Anthropic por instancia
+- Teste a conectividade antes de operar a analise
+
 ### Detalhe da sessao
 - Gere a analise com IA
 - Veja resumo executivo, temas, elogios, criticas e recomendacoes

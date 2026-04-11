@@ -5,6 +5,7 @@ from app.models.response import Response
 from app.models.message import Message
 from app.models.theme import Theme
 from app.models.analysis_run import AnalysisRun
+from app.models.ai_settings import AISettings
 
 __all__ = [
     "Base",
@@ -14,4 +15,5 @@ __all__ = [
     "Message",
     "Theme",
     "AnalysisRun",
+    "AISettings",
 ]
