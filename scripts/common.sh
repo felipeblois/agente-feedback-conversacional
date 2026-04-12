@@ -29,3 +29,8 @@ run_python_module() {
     shift
     "${VENV_PYTHON}" -m "${module}" "$@"
 }
+
+ensure_database_schema() {
+    echo "Garantindo banco atualizado via Alembic..."
+    run_python_module alembic upgrade head
+}

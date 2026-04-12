@@ -23,7 +23,6 @@ Padrao adotado:
 ```bash
 cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 make setup
-make db
 scripts/doctor.sh
 ```
 
@@ -70,7 +69,7 @@ O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
 
 | Comando | Descricao |
 |---|---|
-| `make setup` | Cria venv e instala dependencias |
+| `make setup` | Cria venv, instala dependencias e aplica migrations |
 | `make db` | Inicializa ou atualiza o banco |
 | `make run-api` | Sobe o backend FastAPI |
 | `make run-streamlit` | Sobe o painel admin |
@@ -78,7 +77,7 @@ O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
 | `make test` | Roda os testes |
 | `make seed` | Popula com dados de exemplo |
 | `scripts/doctor.sh` | Valida o ambiente WSL e a venv |
-| `scripts/run_all.sh` | Sobe API e Streamlit no mesmo terminal |
+| `scripts/run_all.sh` | Aplica migrations e sobe API + Streamlit no mesmo terminal |
 | `scripts/test.sh` | Executa os testes pela venv Linux |
 
 ## Estrategia de LLM

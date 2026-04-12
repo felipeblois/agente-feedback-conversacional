@@ -7,13 +7,14 @@ PIP = $(VENV)/bin/pip
 help: ## Mostra ajuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Cria venv e instala dependências
+setup: ## Cria venv, instala dependencias e aplica migrations
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip
 	$(PIP) install -e ".[dev]"
 	cp -n .env.example .env 2>/dev/null || true
 	mkdir -p data data/logs
-	@echo "✅ Setup completo. Ative o venv: source $(VENV)/bin/activate"
+	$(PYTHON) -m alembic upgrade head
+	@echo "Setup completo com banco atualizado. Ative o venv: source $(VENV)/bin/activate"
 
 db: ## Inicializa banco de dados (migrações)
 	$(PYTHON) -m alembic upgrade head

@@ -5,7 +5,6 @@ cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 
 # 2. Crie ou atualize o ambiente
 make setup
-make db
 
 # 3. Valide o ambiente operacional
 scripts/doctor.sh

@@ -28,3 +28,4 @@ for path in "${required_paths[@]}"; do
 done
 
 echo "Diagnostico operacional concluido."
+echo "Banco: migrations sao aplicadas automaticamente por scripts/run_api.sh e scripts/run_all.sh"
