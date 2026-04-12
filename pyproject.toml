@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "feedback-agent-mvp"
+version = "0.1.0"
+description = "Agente de feedback conversacional pós-apresentação"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy>=2.0.0",
+    "alembic",
+    "pydantic",
+    "pydantic-settings",
+    "litellm",
+    "tokenizers<0.16.0",
+    "httpx",
+    "pandas",
+    "python-dotenv",
+    "loguru",
+    "fpdf2",
+    "jinja2",
+    "python-multipart",
+    "aiosqlite",
+    "streamlit",
+    "plotly",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
