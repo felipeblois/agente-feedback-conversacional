@@ -7,4 +7,4 @@ ensure_linux
 ensure_project_root
 ensure_venv
 
-run_python_module streamlit run streamlit_app/Home.py --server.port 8501
+run_python_module streamlit run streamlit_app/Home.py --server.port 8501 --server.headless true --browser.gatherUsageStats false
