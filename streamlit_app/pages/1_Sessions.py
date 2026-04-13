@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from ui import (
+    PUBLIC_BASE_URL,
     api_get,
     api_post,
     configure_page,
@@ -174,7 +175,7 @@ with list_col:
                     st.session_state["selected_session_id"] = session["id"]
                     st.switch_page("pages/2_Session_Detail.py")
             with action_cols[1]:
-                st.code(f"http://localhost:8000/f/{session['public_token']}")
+                st.code(f"{PUBLIC_BASE_URL}/f/{session['public_token']}")
             with action_cols[2]:
                 if st.button("Arquivar", key=f"archive-{session['id']}", use_container_width=True):
                     try:

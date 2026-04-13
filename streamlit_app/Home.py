@@ -1,6 +1,8 @@
 import streamlit as st
 
 from ui import (
+    ADMIN_BASE_URL,
+    PUBLIC_BASE_URL,
     api_get,
     configure_page,
     empty_state,
@@ -157,9 +159,9 @@ with right:
     st.markdown("### Pronto para piloto")
     info_list(
         [
-            ("Backend", "http://localhost:8000"),
-            ("Painel admin", "http://localhost:8501"),
-            ("Banco de dados", "data/feedback_agent.db"),
-            ("Modo operacional", "Execucao local via WSL"),
+            ("Backend publico", PUBLIC_BASE_URL),
+            ("Painel admin", ADMIN_BASE_URL),
+            ("Banco de dados", "SQLite local ou Postgres cloud"),
+            ("Modo operacional", "Configuravel para WSL ou cloud"),
         ]
     )

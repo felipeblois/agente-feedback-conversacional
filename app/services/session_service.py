@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.analysis_run import AnalysisRun
 from app.models.message import Message
 from app.models.participant import Participant
@@ -133,9 +134,10 @@ class SessionService:
             )
 
         latest_analysis = await analysis_service.get_latest(db, session_id)
+        settings = get_settings()
         detail.update(
             {
-                "public_url": f"http://localhost:8000/f/{session.public_token}",
+                "public_url": f"{settings.public_base_url_clean}/f/{session.public_token}",
                 "score_distribution": score_distribution,
                 "recent_responses": recent_responses,
                 "latest_analysis_summary": latest_analysis.get("summary") if latest_analysis else None,

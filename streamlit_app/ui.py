@@ -8,10 +8,14 @@ import httpx
 import streamlit as st
 import streamlit.components.v1 as components
 
+from app.core.config import get_settings
 from app.core.security import get_admin_api_token, get_admin_runtime_meta
 
+settings = get_settings()
 
-API_BASE = "http://localhost:8000/api/v1"
+API_BASE = f"{settings.api_base_url_clean}/api/v1"
+PUBLIC_BASE_URL = settings.public_base_url_clean
+ADMIN_BASE_URL = settings.admin_base_url_clean
 AUTH_STATE_KEY = "admin_authenticated"
 AUTH_TOKEN_KEY = "admin_api_token"
 AUTH_ACTOR_KEY = "admin_actor"
