@@ -34,14 +34,14 @@ cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 # diagnostico do ambiente
 scripts/doctor.sh
 
-# backend
-scripts/run_api.sh
+# iniciar stack completa
+scripts/start.sh
 
-# streamlit
-scripts/run_streamlit.sh
+# ver status
+scripts/status.sh
 
-# stack completa
-scripts/run_all.sh
+# parar stack
+scripts/stop_all.sh
 
 # testes
 scripts/test.sh
@@ -77,7 +77,10 @@ O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
 | `make test` | Roda os testes |
 | `make seed` | Popula com dados de exemplo |
 | `scripts/doctor.sh` | Valida o ambiente WSL e a venv |
+| `scripts/start.sh` | Atalho para subir a stack completa |
 | `scripts/run_all.sh` | Aplica migrations e sobe API + Streamlit no mesmo terminal |
+| `scripts/status.sh` | Mostra status da stack e portas em uso |
+| `scripts/stop_all.sh` | Finaliza API e Streamlit da stack local |
 | `scripts/test.sh` | Executa os testes pela venv Linux |
 
 ## Estrategia de LLM

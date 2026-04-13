@@ -6,6 +6,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 ensure_linux
 ensure_project_root
 ensure_venv
+ensure_database_schema
 
 echo "Projeto: ${PROJECT_ROOT}"
 echo "Python: $("${VENV_PYTHON}" --version 2>&1)"
@@ -26,6 +27,9 @@ for path in "${required_paths[@]}"; do
         exit 1
     fi
 done
+
+echo "Alembic current:"
+run_python_module alembic current
 
 echo "Diagnostico operacional concluido."
 echo "Banco: migrations sao aplicadas automaticamente por scripts/run_api.sh e scripts/run_all.sh"

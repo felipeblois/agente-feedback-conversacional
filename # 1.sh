@@ -12,8 +12,14 @@ scripts/doctor.sh
 # 4. Opcional: dados de exemplo
 make seed
 
-# 5. Suba a stack completa no terminal atual
-scripts/run_all.sh
+# 5. Suba a stack completa
+scripts/start.sh
+
+# 6. Confira o status
+scripts/status.sh
+
+# 7. Para encerrar quando terminar
+scripts/stop_all.sh
 
 # URLs principais
 # API: http://localhost:8000
