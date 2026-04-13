@@ -20,6 +20,8 @@ class Session(Base):
     max_followup_questions: Mapped[int] = mapped_column(Integer, default=3)
     public_token: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
+    created_by_admin_username: Mapped[Optional[str]] = mapped_column(String(255))
+    updated_by_admin_username: Mapped[Optional[str]] = mapped_column(String(255))
     
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

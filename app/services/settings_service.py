@@ -104,18 +104,34 @@ class SettingsService:
 
         db.add(config)
         if changed_fields:
-            db.add(
-                SettingsAuditLog(
-                    area="ai_settings",
-                    action="update",
-                    actor=actor,
-                    instance_id=settings.instance_id,
-                    details=", ".join(changed_fields),
-                )
+            await self.append_audit_log(
+                db,
+                area="ai_settings",
+                action="update",
+                actor=actor,
+                details=", ".join(changed_fields),
             )
         await db.commit()
         await db.refresh(config)
         return self._serialize(config)
+
+    async def append_audit_log(
+        self,
+        db: AsyncSession,
+        area: str,
+        action: str,
+        actor: str,
+        details: str,
+    ) -> None:
+        db.add(
+            SettingsAuditLog(
+                area=area,
+                action=action,
+                actor=actor,
+                instance_id=settings.instance_id,
+                details=details,
+            )
+        )
 
     async def list_audit_logs(self, db: AsyncSession, limit: int = 20) -> Dict:
         result = await db.execute(

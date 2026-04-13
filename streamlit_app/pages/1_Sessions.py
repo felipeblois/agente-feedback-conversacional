@@ -136,6 +136,7 @@ with list_col:
             [
                 {
                     "Sessao": item["title"],
+                    "Criado por": item.get("created_by_admin_username") or "bootstrap",
                     "Tipo": str(item["score_type"]).replace("_", " ").title(),
                     "Respostas": item["response_count"],
                     "Conclusao": format_pct(item["completion_rate"]),
@@ -156,6 +157,7 @@ with list_col:
                     str(session.get("score_type", "")).replace("_", " ").title(),
                     session.get("theme_summary") or "Tema nao informado",
                     session.get("target_audience") or "Publico nao informado",
+                    f"Criado por {session.get('created_by_admin_username') or 'bootstrap'}",
                 ],
                 facts=[
                     ("Respostas", str(session["response_count"])),
@@ -163,7 +165,7 @@ with list_col:
                     ("Score medio", format_score(session.get("avg_score"))),
                     ("Ultima analise", format_dt(session.get("last_analysis_at"))),
                     ("Criada em", format_dt(session.get("created_at"))),
-                    ("Briefing", session.get("session_goal") or "Objetivo nao informado"),
+                    ("Criado por", session.get("created_by_admin_username") or "bootstrap"),
                 ],
             )
             action_cols = st.columns([1.05, 1.25, 1])

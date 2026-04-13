@@ -118,6 +118,7 @@ render_spotlight_card(
         str(detail.get("score_type", "")).replace("_", " ").title(),
         detail.get("theme_summary") or "Tema nao informado",
         detail.get("target_audience") or "Publico nao informado",
+        f"Criado por {detail.get('created_by_admin_username') or 'bootstrap'}",
         f"Atualizada {format_dt(detail.get('updated_at'))}",
     ],
 )
@@ -223,6 +224,7 @@ with overview_tab:
                 ("Objetivo", detail.get("session_goal") or "Nao informado"),
                 ("Publico", detail.get("target_audience") or "Nao informado"),
                 ("Criada", format_dt(detail.get("created_at"))),
+                ("Criado por", detail.get("created_by_admin_username") or "bootstrap"),
                 ("Ultima analise", format_dt(detail.get("last_analysis_at"))),
                 ("Link publico", detail["public_url"]),
             ],
@@ -291,7 +293,7 @@ with overview_tab:
                 {
                     "label": "Status",
                     "value": detail.get("status", "-").title(),
-                    "copy": "Situacao operacional atual.",
+                    "copy": f"Autor: {detail.get('created_by_admin_username') or 'bootstrap'}",
                 },
             ],
             compact=True,

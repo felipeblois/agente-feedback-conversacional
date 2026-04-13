@@ -40,10 +40,16 @@ Variaveis recomendadas no `.env`:
 
 Se `ADMIN_API_TOKEN` ficar vazio, a aplicacao gera internamente um token administrativo a partir da configuracao da instancia.
 
+Bootstrap atual:
+- `ADMIN_USERNAME` e `ADMIN_PASSWORD` continuam sendo a credencial inicial da instancia
+- com esse bootstrap, o primeiro admin pode entrar no painel e cadastrar usuarios admin nominais
+- depois disso, o login pode ser feito tanto pelo bootstrap quanto pelos admins salvos no banco
+
 Antes de uso real com cliente:
 - troque a senha padrao `change-me-admin`
 - defina `INSTANCE_NAME` e `INSTANCE_ID` por instancia
 - revise as chaves Gemini e Anthropic da instancia
+- crie usuarios admin nominais para rastrear quem cria e opera sessoes
 
 ## Operacao diaria
 

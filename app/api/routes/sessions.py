@@ -21,10 +21,10 @@ router = APIRouter()
 async def create_session(
     session_in: SessionCreate,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
-    session = await session_service.create(db, session_in)
-    log_event("info", "session_created", session_id=session.id, title=session.title, score_type=session.score_type)
+    session = await session_service.create(db, session_in, actor=actor)
+    log_event("info", "session_created", session_id=session.id, title=session.title, score_type=session.score_type, actor=actor)
     return session
 
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
@@ -48,24 +48,24 @@ async def list_sessions(
 async def archive_session(
     session_id: int,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
-    session = await session_service.archive(db, id=session_id)
+    session = await session_service.archive(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    log_event("info", "session_archived", session_id=session_id, status=session.status)
+    log_event("info", "session_archived", session_id=session_id, status=session.status, actor=actor)
     return session
 
 @router.post("/{session_id}/reactivate", response_model=SessionResponse)
 async def reactivate_session(
     session_id: int,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
-    session = await session_service.reactivate(db, id=session_id)
+    session = await session_service.reactivate(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    log_event("info", "session_reactivated", session_id=session_id, status=session.status)
+    log_event("info", "session_reactivated", session_id=session_id, status=session.status, actor=actor)
     return session
 
 @router.get("/{session_id}/detail", response_model=SessionDetailResponse)
@@ -95,24 +95,24 @@ async def update_session(
     session_id: int,
     session_in: SessionUpdate,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
     session = await session_service.get(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    updated = await session_service.update(db, db_obj=session, obj_in=session_in)
-    log_event("info", "session_updated", session_id=session_id, title=updated.title, score_type=updated.score_type)
+    updated = await session_service.update(db, db_obj=session, obj_in=session_in, actor=actor)
+    log_event("info", "session_updated", session_id=session_id, title=updated.title, score_type=updated.score_type, actor=actor)
     return updated
 
 @router.delete("/{session_id}")
 async def delete_session(
     session_id: int,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
     session = await session_service.get(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     await session_service.remove(db, id=session_id)
-    log_event("warning", "session_deleted", session_id=session_id)
+    log_event("warning", "session_deleted", session_id=session_id, actor=actor)
     return {"status": "deleted"}

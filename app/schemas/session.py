@@ -41,6 +41,8 @@ class SessionResponse(SessionBase):
 
     id: int
     public_token: str
+    created_by_admin_username: Optional[str] = None
+    updated_by_admin_username: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

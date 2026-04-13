@@ -14,9 +14,14 @@ from app.services.analysis_service import analysis_service
 
 
 class SessionService:
-    async def create(self, db: AsyncSession, obj_in: SessionCreate) -> Session:
+    async def create(self, db: AsyncSession, obj_in: SessionCreate, actor: Optional[str] = None) -> Session:
         public_token = secrets.token_urlsafe(8)
-        db_obj = Session(**obj_in.model_dump(), public_token=public_token)
+        db_obj = Session(
+            **obj_in.model_dump(),
+            public_token=public_token,
+            created_by_admin_username=actor,
+            updated_by_admin_username=actor,
+        )
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
@@ -138,10 +143,18 @@ class SessionService:
         )
         return detail
 
-    async def update(self, db: AsyncSession, db_obj: Session, obj_in: SessionUpdate) -> Session:
+    async def update(
+        self,
+        db: AsyncSession,
+        db_obj: Session,
+        obj_in: SessionUpdate,
+        actor: Optional[str] = None,
+    ) -> Session:
         update_data = obj_in.model_dump(exclude_unset=True)
         for field in update_data:
             setattr(db_obj, field, update_data[field])
+        if actor:
+            db_obj.updated_by_admin_username = actor
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
@@ -153,21 +166,25 @@ class SessionService:
             await db.delete(db_obj)
             await db.commit()
 
-    async def archive(self, db: AsyncSession, id: int) -> Optional[Session]:
+    async def archive(self, db: AsyncSession, id: int, actor: Optional[str] = None) -> Optional[Session]:
         db_obj = await self.get(db, id)
         if not db_obj:
             return None
         db_obj.status = "archived"
+        if actor:
+            db_obj.updated_by_admin_username = actor
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
         return db_obj
 
-    async def reactivate(self, db: AsyncSession, id: int) -> Optional[Session]:
+    async def reactivate(self, db: AsyncSession, id: int, actor: Optional[str] = None) -> Optional[Session]:
         db_obj = await self.get(db, id)
         if not db_obj:
             return None
         db_obj.status = "active"
+        if actor:
+            db_obj.updated_by_admin_username = actor
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
@@ -241,6 +258,8 @@ class SessionService:
                     "is_anonymous": session.is_anonymous,
                     "max_followup_questions": session.max_followup_questions,
                     "status": session.status,
+                    "created_by_admin_username": session.created_by_admin_username,
+                    "updated_by_admin_username": session.updated_by_admin_username,
                     "public_token": session.public_token,
                     "created_at": session.created_at,
                     "updated_at": session.updated_at,

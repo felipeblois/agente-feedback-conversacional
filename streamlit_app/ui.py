@@ -8,12 +8,13 @@ import httpx
 import streamlit as st
 import streamlit.components.v1 as components
 
-from app.core.security import get_admin_api_token, get_admin_runtime_meta, verify_admin_credentials
+from app.core.security import get_admin_api_token, get_admin_runtime_meta
 
 
 API_BASE = "http://localhost:8000/api/v1"
 AUTH_STATE_KEY = "admin_authenticated"
 AUTH_TOKEN_KEY = "admin_api_token"
+AUTH_ACTOR_KEY = "admin_actor"
 
 
 def configure_page(title: str, icon: str) -> None:
@@ -71,12 +72,21 @@ def ensure_admin_access() -> None:
         password = st.text_input("Senha", type="password")
         submitted = st.form_submit_button("Entrar", use_container_width=True)
         if submitted:
-            if verify_admin_credentials(username, password):
+            try:
+                with httpx.Client(timeout=30.0) as client:
+                    response = client.post(
+                        f"{API_BASE}/settings/admin/login",
+                        json={"username": username, "password": password},
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
                 st.session_state[AUTH_STATE_KEY] = True
-                st.session_state[AUTH_TOKEN_KEY] = get_admin_api_token()
+                st.session_state[AUTH_TOKEN_KEY] = payload["token"]
+                st.session_state[AUTH_ACTOR_KEY] = payload["actor"]
                 st.success("Acesso liberado com sucesso.")
                 st.rerun()
-            st.error("Credenciais invalidas.")
+            except Exception:
+                st.error("Credenciais invalidas.")
 
     if meta.get("uses_default_password"):
         st.warning(
@@ -89,6 +99,7 @@ def render_logout_control() -> None:
     if st.sidebar.button("Sair", key="logout-admin", use_container_width=True):
         st.session_state.pop(AUTH_STATE_KEY, None)
         st.session_state.pop(AUTH_TOKEN_KEY, None)
+        st.session_state.pop(AUTH_ACTOR_KEY, None)
         st.rerun()
 
 
@@ -697,6 +708,8 @@ def render_sidebar(current_page: str) -> None:
     )
     st.sidebar.markdown("---")
     st.sidebar.caption("Configuracoes e operacao centralizadas no painel.")
+    if st.session_state.get(AUTH_ACTOR_KEY):
+        st.sidebar.caption(f"Conectado como {st.session_state[AUTH_ACTOR_KEY]}")
     render_logout_control()
 
 
