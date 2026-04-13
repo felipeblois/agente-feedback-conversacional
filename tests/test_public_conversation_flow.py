@@ -1,6 +1,8 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
+from app.models.response import Response
 from app.services.conversation_service import conversation_service
 
 
@@ -127,3 +129,29 @@ def test_minimum_required_questions_rule():
     assert conversation_service._minimum_required_questions(1) == 1
     assert conversation_service._minimum_required_questions(2) == 2
     assert conversation_service._minimum_required_questions(6) == 2
+
+
+@pytest.mark.asyncio
+async def test_finish_endpoint_marks_response_as_completed(async_client: AsyncClient, db_session):
+    created = await _create_session(async_client, max_followup_questions=3)
+    token = created["public_token"]
+    session_id = created["id"]
+
+    try:
+        start_response = await async_client.post(f"/api/v1/public/{token}/start", json={"anonymous": True})
+        assert start_response.status_code == 200
+        response_id = start_response.json()["response_id"]
+
+        finish_response = await async_client.post(
+            f"/api/v1/public/{token}/finish",
+            json={"response_id": response_id},
+        )
+        assert finish_response.status_code == 200
+        assert finish_response.json() == {"status": "completed"}
+
+        db_result = await db_session.execute(select(Response).where(Response.id == response_id))
+        response = db_result.scalar_one()
+        assert response.status == "completed"
+        assert response.completed_at is not None
+    finally:
+        await async_client.delete(f"/api/v1/sessions/{session_id}")

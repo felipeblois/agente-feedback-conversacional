@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,25 +49,31 @@ class ExportService:
             
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, f"Feedback Report: {session.title}", ln=1, align='C')
+        pdf.set_font("helvetica", "B", 16)
+        pdf.cell(0, 10, f"Feedback Report: {session.title}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         
-        pdf.set_font("Arial", size=12)
+        pdf.set_font("helvetica", size=12)
         pdf.ln(10)
         
         avg = analysis["avg_score"] if analysis["avg_score"] else 0
-        pdf.cell(200, 10, f"Score Medio: {avg:.2f} | Total de Respostas: {analysis['response_count']}", ln=1)
+        pdf.cell(
+            0,
+            10,
+            f"Score Medio: {avg:.2f} | Total de Respostas: {analysis['response_count']}",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
         pdf.ln(5)
         
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(200, 10, "Resumo Executivo", ln=1)
-        pdf.set_font("Arial", size=12)
+        pdf.set_font("helvetica", "B", 14)
+        pdf.cell(0, 10, "Resumo Executivo", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", size=12)
         pdf.multi_cell(0, 10, analysis["summary"])
         
         pdf.ln(5)
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(200, 10, "Principais Temas Mencionados", ln=1)
-        pdf.set_font("Arial", size=12)
+        pdf.set_font("helvetica", "B", 14)
+        pdf.cell(0, 10, "Principais Temas Mencionados", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", size=12)
         themes = ", ".join(analysis["top_positive_themes"])
         pdf.multi_cell(0, 10, f"Temas Frequentes: {themes if themes else 'Nenhum'}")
         

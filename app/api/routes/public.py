@@ -21,10 +21,10 @@ async def public_chat_page(public_token: str, request: Request, db: AsyncSession
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found or inactive")
         
     return templates.TemplateResponse(
-        "participant_chat.html", 
+        request,
+        "participant_chat.html",
         {
-            "request": request, 
             "session": session,
-            "public_token": public_token
-        }
+            "public_token": public_token,
+        },
     )
