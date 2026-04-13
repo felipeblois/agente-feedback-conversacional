@@ -13,12 +13,25 @@ from ui import (
     panel_header,
     render_insight_card,
     render_kpi_card,
+    render_session_card,
     render_sidebar,
+    render_spotlight_card,
+    render_stat_band,
     status_pill,
 )
 
 
-configure_page("Sessoes arquivadas", "🗃️")
+FEEDBACK_TYPE_OPTIONS = [
+    "Todos",
+    "treinamento",
+    "palestra",
+    "cast",
+    "workshop",
+    "onboarding",
+]
+
+
+configure_page("Sessoes arquivadas", "R")
 render_sidebar("archived")
 
 panel_header(
@@ -40,7 +53,77 @@ if not archived_sessions:
     )
     st.stop()
 
-archived_ids = [session["id"] for session in archived_sessions]
+search_col, filter_col = st.columns([2.4, 1.2])
+with search_col:
+    search_term = st.text_input("Buscar sessoes arquivadas", placeholder="Titulo, tema ou publico")
+with filter_col:
+    feedback_type = st.selectbox(
+        "Tipo de feedback",
+        FEEDBACK_TYPE_OPTIONS,
+        format_func=lambda value: value.replace("_", " ").title(),
+    )
+
+filtered_archived = []
+for session in archived_sessions:
+    searchable = " ".join(
+        [
+            str(session.get("title") or ""),
+            str(session.get("description") or ""),
+            str(session.get("theme_summary") or ""),
+            str(session.get("target_audience") or ""),
+        ]
+    ).lower()
+    matches_search = not search_term or search_term.lower() in searchable
+    matches_type = feedback_type == "Todos" or session.get("score_type") == feedback_type
+    if matches_search and matches_type:
+        filtered_archived.append(session)
+
+if not filtered_archived:
+    empty_state(
+        "Nenhuma sessao encontrada",
+        "Ajuste os filtros para localizar uma sessao arquivada.",
+    )
+    st.stop()
+
+lead_session = filtered_archived[0]
+render_spotlight_card(
+    "Arquivo operacional",
+    lead_session["title"],
+    lead_session.get("description") or "Sessao arquivada pronta para consulta e eventual reativacao.",
+    [
+        str(lead_session.get("score_type", "")).replace("_", " ").title(),
+        f"{lead_session['response_count']} respostas",
+        f"{format_pct(lead_session['completion_rate'])} de conclusao",
+        lead_session.get("target_audience") or "Publico nao informado",
+    ],
+)
+
+render_stat_band(
+    [
+        {
+            "label": "Arquivadas",
+            "value": str(len(archived_sessions)),
+            "copy": "Sessoes preservadas no historico.",
+        },
+        {
+            "label": "Filtradas",
+            "value": str(len(filtered_archived)),
+            "copy": "Resultado atual da busca.",
+        },
+        {
+            "label": "Respostas",
+            "value": str(sum(item["response_count"] for item in filtered_archived)),
+            "copy": "Volume total das sessoes visiveis.",
+        },
+        {
+            "label": "Analises",
+            "value": str(sum(item["analysis_count"] for item in filtered_archived)),
+            "copy": "Leituras concluidas no historico.",
+        },
+    ]
+)
+
+archived_ids = [session["id"] for session in filtered_archived]
 default_archived_id = st.session_state.get("selected_archived_session_id", archived_ids[0])
 if default_archived_id not in archived_ids:
     default_archived_id = archived_ids[0]
@@ -49,9 +132,7 @@ selected_id = st.selectbox(
     "Selecione a sessao arquivada",
     options=archived_ids,
     index=archived_ids.index(default_archived_id),
-    format_func=lambda session_id: next(
-        item["title"] for item in archived_sessions if item["id"] == session_id
-    ),
+    format_func=lambda session_id: next(item["title"] for item in filtered_archived if item["id"] == session_id),
 )
 st.session_state["selected_archived_session_id"] = selected_id
 
@@ -68,25 +149,33 @@ except Exception:
 
 kpi_cols = st.columns(4)
 with kpi_cols[0]:
-    render_kpi_card("🗃", "Arquivadas", str(len(archived_sessions)), "Sessoes no historico", "blue")
+    render_kpi_card("ARC", "Arquivadas", str(len(archived_sessions)), "Sessoes no historico", "blue")
 with kpi_cols[1]:
-    render_kpi_card("💬", "Respostas", str(detail["response_count"]), "Volume da sessao", "teal")
+    render_kpi_card("RES", "Respostas", str(detail["response_count"]), "Volume da sessao", "teal")
 with kpi_cols[2]:
-    render_kpi_card("◔", "Conclusao", format_pct(detail["completion_rate"]), "Fluxos encerrados", "gold")
+    render_kpi_card("TAX", "Conclusao", format_pct(detail["completion_rate"]), "Fluxos encerrados", "gold")
 with kpi_cols[3]:
-    render_kpi_card("★", "Score medio", format_score(detail.get("avg_score")), "Media registrada", "purple")
+    render_kpi_card("AVG", "Score medio", format_score(detail.get("avg_score")), "Media registrada", "purple")
 
 header_cols = st.columns([3.3, 1.2])
 with header_cols[0]:
-    st.markdown(
-        f"""
-        <div class="panel-card">
-            <div class="section-title">{detail['title']}</div>
-            <p class="section-copy">{detail.get('description') or 'Sem descricao cadastrada.'}</p>
-            <p class="section-copy">{status_pill(detail["status"])} <span style="margin-left:10px;color:#a6acc9;">Sessao preservada no historico</span></p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_session_card(
+        title=detail["title"],
+        description=detail.get("description") or "Sem descricao cadastrada.",
+        status_html=status_pill(detail["status"]),
+        chips=[
+            str(detail.get("score_type", "")).replace("_", " ").title(),
+            detail.get("theme_summary") or "Tema nao informado",
+            detail.get("target_audience") or "Publico nao informado",
+        ],
+        facts=[
+            ("Criada", format_dt(detail.get("created_at"))),
+            ("Ultima analise", format_dt(detail.get("last_analysis_at"))),
+            ("Objetivo", detail.get("session_goal") or "Nao informado"),
+            ("Topicos", detail.get("topics_to_explore") or "Nao informado"),
+            ("Respostas", str(detail["response_count"])),
+            ("Conclusao", format_pct(detail["completion_rate"])),
+        ],
     )
 with header_cols[1]:
     if st.button("Reativar sessao", use_container_width=True):
@@ -150,18 +239,25 @@ with main_col:
 
 with side_col:
     st.markdown("### Historico da sessao")
-    st.markdown(
-        f"""
-        <div class="panel-card">
-            <div class="section-title">Contexto</div>
-            <p class="section-copy">Criada em {format_dt(detail.get("created_at"))}</p>
-            <p class="section-copy">Ultima analise em {format_dt(detail.get("last_analysis_at"))}</p>
-            <p class="section-copy">Tipo de feedback {str(detail.get("score_type", "")).replace("_", " ").title()}</p>
-            <p class="section-copy">Tema principal {detail.get("theme_summary") or "Nao informado"}</p>
-            <p class="section-copy">Objetivo {detail.get("session_goal") or "Nao informado"}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_stat_band(
+        [
+            {
+                "label": "Tipo",
+                "value": str(detail.get("score_type", "")).replace("_", " ").title() or "-",
+                "copy": "Modelo de feedback da sessao.",
+            },
+            {
+                "label": "Publico-alvo",
+                "value": detail.get("target_audience") or "-",
+                "copy": "Quem participou da coleta.",
+            },
+            {
+                "label": "Aprofundamento",
+                "value": str(detail.get("max_followup_questions")),
+                "copy": "Limite configurado no briefing.",
+            },
+        ],
+        compact=True,
     )
 
     st.markdown("### Insights")
@@ -175,10 +271,7 @@ with side_col:
             ("Recomendacoes", analysis.get("recommendations", [])),
         ]
         for title, items in insight_sections:
-            if items:
-                render_insight_card(title, " • ".join(str(item) for item in items))
-            else:
-                render_insight_card(title, "Nenhum item disponivel no momento.")
+            render_insight_card(title, " | ".join(str(item) for item in items) if items else "Nenhum item disponivel no momento.")
     else:
         empty_state(
             "Sem analise registrada",

@@ -58,6 +58,14 @@ Compartilhe o link publico `http://localhost:8000/f/{token}` com os participante
 ### Visualizar resultados
 Acesse o painel admin em `http://localhost:8501`.
 
+### Operar sessoes no admin
+No painel Streamlit agora e possivel:
+- criar sessoes com briefing estruturado para IA
+- editar titulo, descricao, briefing e limite de aprofundamento
+- arquivar sessoes ativas
+- reativar sessoes arquivadas
+- acompanhar detalhe, respostas recentes e exportacoes
+
 ### Configurar credenciais da instancia
 Use a pagina `Configuracoes` no painel para definir se a instancia usa:
 - credenciais do cliente
