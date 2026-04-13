@@ -8,13 +8,93 @@ import httpx
 import streamlit as st
 import streamlit.components.v1 as components
 
+from app.core.security import get_admin_api_token, get_admin_runtime_meta, verify_admin_credentials
+
 
 API_BASE = "http://localhost:8000/api/v1"
+AUTH_STATE_KEY = "admin_authenticated"
+AUTH_TOKEN_KEY = "admin_api_token"
 
 
 def configure_page(title: str, icon: str) -> None:
     st.set_page_config(page_title=title, page_icon=icon, layout="wide")
     inject_theme()
+
+
+def ensure_admin_access() -> None:
+    if st.session_state.get(AUTH_STATE_KEY):
+        return
+
+    meta = get_admin_runtime_meta()
+    st.markdown(
+        """
+        <style>
+            .auth-shell {
+                max-width: 520px;
+                margin: 7vh auto 0 auto;
+                padding: 28px;
+                border-radius: 24px;
+                border: 1px solid rgba(167, 176, 211, 0.14);
+                background: linear-gradient(180deg, rgba(28, 31, 44, 0.98), rgba(21, 23, 33, 0.98));
+                box-shadow: 0 22px 46px rgba(0, 0, 0, 0.28);
+            }
+            .auth-title {
+                color: #f2f4fb;
+                font-size: 1.8rem;
+                font-weight: 700;
+                margin-bottom: 0.4rem;
+            }
+            .auth-copy {
+                color: #a6acc9;
+                line-height: 1.5;
+                margin-bottom: 1rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="auth-shell">
+            <div class="auth-title">Acesso do admin</div>
+            <div class="auth-copy">
+                Painel protegido da instancia <strong>{html.escape(str(meta["instance_name"]))}</strong>.
+                Entre com suas credenciais para continuar.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("admin_login_form"):
+        username = st.text_input("Usuario", value=meta["admin_username"])
+        password = st.text_input("Senha", type="password")
+        submitted = st.form_submit_button("Entrar", use_container_width=True)
+        if submitted:
+            if verify_admin_credentials(username, password):
+                st.session_state[AUTH_STATE_KEY] = True
+                st.session_state[AUTH_TOKEN_KEY] = get_admin_api_token()
+                st.success("Acesso liberado com sucesso.")
+                st.rerun()
+            st.error("Credenciais invalidas.")
+
+    if meta.get("uses_default_password"):
+        st.warning(
+            "Esta instancia ainda usa a senha padrao do admin. Antes de comercializar, altere ADMIN_PASSWORD no .env."
+        )
+    st.stop()
+
+
+def render_logout_control() -> None:
+    if st.sidebar.button("Sair", key="logout-admin", use_container_width=True):
+        st.session_state.pop(AUTH_STATE_KEY, None)
+        st.session_state.pop(AUTH_TOKEN_KEY, None)
+        st.rerun()
+
+
+def _admin_headers() -> Dict[str, str]:
+    token = st.session_state.get(AUTH_TOKEN_KEY) or get_admin_api_token()
+    return {"X-Admin-Token": token}
 
 
 def inject_theme() -> None:
@@ -617,6 +697,7 @@ def render_sidebar(current_page: str) -> None:
     )
     st.sidebar.markdown("---")
     st.sidebar.caption("Configuracoes e operacao centralizadas no painel.")
+    render_logout_control()
 
 
 def panel_header(eyebrow: str, title: str, subtitle: str) -> None:
@@ -707,42 +788,42 @@ def format_dt(value: Optional[str | datetime]) -> str:
 
 def api_get(path: str) -> Any:
     with httpx.Client(timeout=30.0) as client:
-        response = client.get(f"{API_BASE}{path}")
+        response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_post(path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
     with httpx.Client(timeout=60.0) as client:
-        response = client.post(f"{API_BASE}{path}", json=payload or {})
+        response = client.post(f"{API_BASE}{path}", json=payload or {}, headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_put(path: str, payload: Dict[str, Any]) -> Any:
     with httpx.Client(timeout=60.0) as client:
-        response = client.put(f"{API_BASE}{path}", json=payload)
+        response = client.put(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_patch(path: str, payload: Dict[str, Any]) -> Any:
     with httpx.Client(timeout=60.0) as client:
-        response = client.patch(f"{API_BASE}{path}", json=payload)
+        response = client.patch(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_delete(path: str) -> Any:
     with httpx.Client(timeout=30.0) as client:
-        response = client.delete(f"{API_BASE}{path}")
+        response = client.delete(f"{API_BASE}{path}", headers=_admin_headers())
         response.raise_for_status()
         return response.json() if response.content else None
 
 
 def api_get_bytes(path: str) -> bytes:
     with httpx.Client(timeout=60.0) as client:
-        response = client.get(f"{API_BASE}{path}")
+        response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
         response.raise_for_status()
         return response.content
 

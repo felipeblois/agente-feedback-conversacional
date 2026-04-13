@@ -17,6 +17,7 @@ Padrao adotado:
 - Python 3.8+ dentro do WSL
 - API key do Gemini
 - API key da Anthropic para fallback cloud
+- credenciais do admin da instancia no `.env`
 
 ## Setup rapido
 
@@ -25,6 +26,24 @@ cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 make setup
 scripts/doctor.sh
 ```
+
+## Protecao do admin
+
+O painel admin e os endpoints administrativos agora exigem autenticacao.
+
+Variaveis recomendadas no `.env`:
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `ADMIN_API_TOKEN` opcional
+- `INSTANCE_NAME`
+- `INSTANCE_ID`
+
+Se `ADMIN_API_TOKEN` ficar vazio, a aplicacao gera internamente um token administrativo a partir da configuracao da instancia.
+
+Antes de uso real com cliente:
+- troque a senha padrao `change-me-admin`
+- defina `INSTANCE_NAME` e `INSTANCE_ID` por instancia
+- revise as chaves Gemini e Anthropic da instancia
 
 ## Operacao diaria
 
@@ -72,6 +91,7 @@ Use a pagina `Configuracoes` no painel para definir se a instancia usa:
 - credenciais da plataforma
 
 O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
+As alteracoes de settings passam a registrar uma trilha minima de auditoria no backend.
 
 ## Comandos disponiveis
 

@@ -7,6 +7,7 @@ from ui import (
     api_post,
     configure_page,
     empty_state,
+    ensure_admin_access,
     format_dt,
     format_pct,
     format_score,
@@ -32,6 +33,7 @@ FEEDBACK_TYPE_OPTIONS = [
 
 
 configure_page("Sessoes arquivadas", "R")
+ensure_admin_access()
 render_sidebar("archived")
 
 panel_header(

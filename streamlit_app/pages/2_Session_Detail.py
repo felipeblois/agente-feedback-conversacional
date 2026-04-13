@@ -13,6 +13,7 @@ from ui import (
     clipboard_button,
     configure_page,
     empty_state,
+    ensure_admin_access,
     format_dt,
     format_pct,
     format_score,
@@ -56,6 +57,7 @@ def friendly_provider_name(provider: Optional[str], model: Optional[str] = None)
 
 
 configure_page("Detalhe da sessao", "A")
+ensure_admin_access()
 render_sidebar("detail")
 
 panel_header(

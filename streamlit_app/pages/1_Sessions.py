@@ -6,6 +6,7 @@ from ui import (
     api_post,
     configure_page,
     empty_state,
+    ensure_admin_access,
     format_dt,
     format_pct,
     format_score,
@@ -44,6 +45,7 @@ def matches_filters(session: dict, query: str, feedback_filter: str) -> bool:
 
 
 configure_page("Sessoes", "S")
+ensure_admin_access()
 render_sidebar("sessions")
 
 panel_header(

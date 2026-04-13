@@ -5,6 +5,7 @@ from sqlalchemy import select
 from loguru import logger
 
 from app.api.dependencies import get_db_session
+from app.core.observability import log_event
 from app.models.session import Session
 
 router = APIRouter()
@@ -19,6 +20,8 @@ async def public_chat_page(public_token: str, request: Request, db: AsyncSession
     if not session:
         logger.warning(f"Invalid or inactive public_token accessed: {public_token}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found or inactive")
+
+    log_event("info", "public_page_rendered", session_id=session.id, public_token=public_token)
         
     return templates.TemplateResponse(
         request,

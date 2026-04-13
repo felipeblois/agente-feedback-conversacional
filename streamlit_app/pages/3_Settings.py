@@ -5,22 +5,27 @@ from ui import (
     api_post,
     api_put,
     configure_page,
+    ensure_admin_access,
+    format_dt,
     panel_header,
     render_sidebar,
 )
 
 
-configure_page("Configuracoes", "⚙")
+configure_page("Configuracoes", "C")
+ensure_admin_access()
 render_sidebar("settings")
 
 panel_header(
     "Configuracoes",
     "Credenciais de IA",
-    "Defina se esta instancia usa as chaves do cliente ou as credenciais padrao da plataforma.",
+    "Defina a origem das credenciais, valide conexoes e acompanhe a trilha minima de auditoria.",
 )
 
 try:
     config = api_get("/settings/ai")
+    security_meta = api_get("/settings/admin/meta")
+    audit_logs = api_get("/settings/ai/audit")
 except Exception as exc:
     st.error(f"Nao foi possivel carregar as configuracoes: {exc}")
     st.stop()
@@ -54,6 +59,8 @@ with col_form:
             type="password",
             placeholder=config.get("anthropic_key_masked") or "Nenhuma chave salva",
         )
+        clear_gemini = st.checkbox("Remover chave Gemini salva")
+        clear_anthropic = st.checkbox("Remover chave Anthropic salva")
         notes = st.text_area("Observacoes", value=config.get("notes", ""))
 
         submitted = st.form_submit_button("Salvar configuracoes", use_container_width=True)
@@ -70,6 +77,8 @@ with col_form:
                     "notes": notes,
                     "gemini_api_key": gemini_api_key if gemini_api_key else None,
                     "anthropic_api_key": anthropic_api_key if anthropic_api_key else None,
+                    "clear_gemini_api_key": clear_gemini,
+                    "clear_anthropic_api_key": clear_anthropic,
                 }
                 api_put("/settings/ai", payload)
                 st.success("Configuracoes salvas com sucesso.")
@@ -84,7 +93,17 @@ with col_test:
         f"Gemini configurado: {'Sim' if config['gemini_key_configured'] else 'Nao'}\n\n"
         f"Anthropic configurado: {'Sim' if config['anthropic_key_configured'] else 'Nao'}"
     )
+    st.caption(
+        f"Instancia: {security_meta['instance_name']} ({security_meta['instance_id']}) | "
+        f"Admin: {security_meta['admin_username']}"
+    )
+    st.caption(
+        f"Ultima rotacao Gemini: {format_dt(config.get('gemini_key_updated_at'))} | "
+        f"Anthropic: {format_dt(config.get('anthropic_key_updated_at'))}"
+    )
     st.caption("As chaves ficam mascaradas na interface e nunca sao exibidas por completo.")
+    if security_meta.get("uses_default_password"):
+        st.warning("Senha padrao do admin em uso. Altere ADMIN_PASSWORD no .env antes de atender cliente real.")
 
     st.markdown("### Testar conexao")
     if st.button("Testar Gemini", use_container_width=True):
@@ -116,3 +135,12 @@ with col_test:
         "- `Credenciais da plataforma`: usa as chaves do `.env` da instancia.\n"
         "- Em ambos os casos, a aplicacao segue `Gemini -> Anthropic -> Jarvis`."
     )
+
+    st.markdown("### Auditoria minima")
+    if audit_logs.get("items"):
+        for item in audit_logs["items"][:8]:
+            st.markdown(
+                f"- `{format_dt(item['created_at'])}` | `{item['actor']}` | `{item['details']}`"
+            )
+    else:
+        st.caption("Nenhuma alteracao auditada ainda.")

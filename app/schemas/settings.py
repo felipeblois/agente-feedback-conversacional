@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,6 +18,8 @@ class AISettingsBase(BaseModel):
 class AISettingsUpdate(AISettingsBase):
     gemini_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    clear_gemini_api_key: bool = False
+    clear_anthropic_api_key: bool = False
 
 
 class AISettingsResponse(AISettingsBase):
@@ -28,6 +30,8 @@ class AISettingsResponse(AISettingsBase):
     anthropic_key_configured: bool
     gemini_key_masked: str
     anthropic_key_masked: str
+    gemini_key_updated_at: Optional[datetime] = None
+    anthropic_key_updated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -43,3 +47,24 @@ class AISettingsTestResponse(BaseModel):
     model: str
     credential_source: str
     message: str
+
+
+class SettingsAuditLogResponse(BaseModel):
+    id: int
+    area: str
+    action: str
+    actor: str
+    instance_id: str
+    details: str
+    created_at: datetime
+
+
+class SettingsSecurityMetaResponse(BaseModel):
+    instance_name: str
+    instance_id: str
+    admin_username: str
+    uses_default_password: bool
+
+
+class SettingsAuditListResponse(BaseModel):
+    items: List[SettingsAuditLogResponse]

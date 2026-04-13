@@ -1,11 +1,12 @@
 import json
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 
-from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.observability import log_event
 from app.models.message import Message
 from app.models.response import Response
 from app.models.session import Session
@@ -68,6 +69,7 @@ class ConversationService:
         response_id: int,
         max_questions: int,
     ) -> Dict[str, object]:
+        started_at = time.perf_counter()
         response, session = await self._load_response_context(db, response_id)
         if not response or not session or response.score is None:
             return {"next_question": None, "finished": True, "finish_reason": "missing_context"}
@@ -75,9 +77,15 @@ class ConversationService:
         system_questions_asked = await self._count_system_questions(db, response_id)
         minimum_required = self._minimum_required_questions(max_questions)
         if system_questions_asked >= max_questions:
-            logger.info(
-                f"conversation_finished | response_id={response_id} | reason=max_questions_reached | "
-                f"questions_asked={system_questions_asked} | max_questions={max_questions}"
+            log_event(
+                "info",
+                "conversation_finished",
+                session_id=session.id,
+                response_id=response_id,
+                reason="max_questions_reached",
+                questions_asked=system_questions_asked,
+                max_questions=max_questions,
+                duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
             )
             return {
                 "next_question": None,
@@ -95,9 +103,15 @@ class ConversationService:
         )
 
         if llm_result.get("should_finish") is True and system_questions_asked >= minimum_required:
-            logger.info(
-                f"conversation_finished | response_id={response_id} | reason=llm_sufficient_context | "
-                f"questions_asked={system_questions_asked} | minimum_required={minimum_required}"
+            log_event(
+                "info",
+                "conversation_finished",
+                session_id=session.id,
+                response_id=response_id,
+                reason="llm_sufficient_context",
+                questions_asked=system_questions_asked,
+                minimum_required=minimum_required,
+                duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
             )
             return {
                 "next_question": None,
@@ -123,16 +137,28 @@ class ConversationService:
                 if system_questions_asked >= minimum_required
                 else "no_valid_question_available"
             )
-            logger.info(
-                f"conversation_finished | response_id={response_id} | reason={finish_reason} | "
-                f"questions_asked={system_questions_asked} | minimum_required={minimum_required}"
+            log_event(
+                "info",
+                "conversation_finished",
+                session_id=session.id,
+                response_id=response_id,
+                reason=finish_reason,
+                questions_asked=system_questions_asked,
+                minimum_required=minimum_required,
+                duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
             )
             return {"next_question": None, "finished": True, "finish_reason": finish_reason}
 
         await self._save_system_question(db, response_id, question_text)
-        logger.info(
-            f"conversation_question_selected | response_id={response_id} | source={question_source} | "
-            f"question_index={system_questions_asked + 1} | max_questions={max_questions}"
+        log_event(
+            "info",
+            "conversation_question_selected",
+            session_id=session.id,
+            response_id=response_id,
+            source=question_source,
+            question_index=system_questions_asked + 1,
+            max_questions=max_questions,
+            duration_ms=round((time.perf_counter() - started_at) * 1000, 2),
         )
         return {
             "next_question": {"type": "text", "text": question_text},
@@ -231,15 +257,23 @@ class ConversationService:
             provider_override="gemini",
         )
         if not response:
-            logger.warning(
-                f"conversation_fallback_engaged | response_id={response_id} | reason=gemini_unavailable"
+            log_event(
+                "warning",
+                "conversation_fallback_engaged",
+                session_id=session.id,
+                response_id=response_id,
+                reason="gemini_unavailable",
             )
             return {"question": None, "should_finish": False, "source": "fallback"}
 
         parsed = self._parse_llm_payload(response)
         if not parsed:
-            logger.warning(
-                f"conversation_fallback_engaged | response_id={response_id} | reason=invalid_llm_payload"
+            log_event(
+                "warning",
+                "conversation_fallback_engaged",
+                session_id=session.id,
+                response_id=response_id,
+                reason="invalid_llm_payload",
             )
             return {"question": None, "should_finish": False, "source": "fallback"}
 
@@ -247,21 +281,32 @@ class ConversationService:
         question = self._sanitize_question(parsed.get("next_question", ""))
 
         if should_finish:
-            logger.info(
-                f"conversation_llm_finish_signal | response_id={response_id} | "
-                f"question_index={system_questions_asked + 1}"
+            log_event(
+                "info",
+                "conversation_llm_finish_signal",
+                session_id=session.id,
+                response_id=response_id,
+                question_index=system_questions_asked + 1,
             )
             return {"question": None, "should_finish": True, "source": "gemini"}
 
         if not self._is_valid_question(question):
-            logger.warning(
-                f"conversation_fallback_engaged | response_id={response_id} | reason=invalid_llm_question"
+            log_event(
+                "warning",
+                "conversation_fallback_engaged",
+                session_id=session.id,
+                response_id=response_id,
+                reason="invalid_llm_question",
             )
             return {"question": None, "should_finish": False, "source": "fallback"}
 
-        logger.info(
-            f"conversation_llm_success | response_id={response_id} | provider=gemini | "
-            f"question_index={system_questions_asked + 1}"
+        log_event(
+            "info",
+            "conversation_llm_success",
+            session_id=session.id,
+            response_id=response_id,
+            provider="gemini",
+            question_index=system_questions_asked + 1,
         )
         return {"question": question, "should_finish": False, "source": "gemini"}
 

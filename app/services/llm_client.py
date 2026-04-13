@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Dict, Optional, Tuple
 
 import litellm
@@ -6,6 +7,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.observability import log_event, observability_service
 from app.services.settings_service import settings_service
 
 
@@ -64,22 +66,38 @@ def _classify_exception(exc: Exception) -> Tuple[str, str]:
 
 
 def _log_attempt(stage: str, provider: str, model: str, credential_source: str) -> None:
-    logger.info(
-        f"LLM attempt | stage={stage} | provider={provider} | model={model} | credential_source={credential_source}"
+    log_event(
+        "info",
+        "llm_attempt",
+        stage=stage,
+        provider=provider,
+        model=model,
+        credential_source=credential_source,
     )
 
 
 def _log_skip(stage: str, provider: str, model: str, category: str, message: str) -> None:
-    logger.warning(
-        f"LLM skipped | stage={stage} | provider={provider} | model={model} | "
-        f"category={category} | message={message}"
+    log_event(
+        "warning",
+        "llm_skipped",
+        stage=stage,
+        provider=provider,
+        model=model,
+        category=category,
+        message=message,
     )
 
 
 def _log_failure(stage: str, provider: str, model: str, category: str, message: str, action: str) -> None:
-    logger.warning(
-        f"LLM failed | stage={stage} | provider={provider} | model={model} | "
-        f"category={category} | message={message} | action={action}"
+    log_event(
+        "warning",
+        "llm_failed",
+        stage=stage,
+        provider=provider,
+        model=model,
+        category=category,
+        message=message,
+        action=action,
     )
 
 
@@ -102,12 +120,42 @@ async def _call_provider(
 
     full_model = _resolve_model(provider, model)
     _log_attempt(stage, provider, full_model, runtime_config.get("credential_source", "platform"))
-    response = await litellm.acompletion(
-        model=full_model,
-        messages=messages,
-        max_tokens=2048,
-    )
-    return response.choices[0].message.content
+    started_at = time.perf_counter()
+    try:
+        response = await litellm.acompletion(
+            model=full_model,
+            messages=messages,
+            max_tokens=2048,
+        )
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        observability_service.record_llm(
+            provider=provider,
+            model=model,
+            stage=stage,
+            duration_ms=duration_ms,
+            success=True,
+        )
+        log_event(
+            "info",
+            "llm_provider_completed",
+            stage=stage,
+            provider=provider,
+            model=model,
+            duration_ms=duration_ms,
+        )
+        return response.choices[0].message.content
+    except Exception as exc:
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        category, _ = _classify_exception(exc)
+        observability_service.record_llm(
+            provider=provider,
+            model=model,
+            stage=stage,
+            duration_ms=duration_ms,
+            success=False,
+            error_category=category,
+        )
+        raise
 
 
 async def _load_runtime_config(db: AsyncSession) -> Dict[str, str]:
@@ -155,17 +203,24 @@ async def call_llm(
         try:
             content = await _call_provider(stage, provider, model, messages, runtime_config)
             if content:
-                logger.info(
-                    f"LLM success | stage={stage} | provider={provider} | model={model} | "
-                    f"credential_source={runtime_config.get('credential_source', 'platform')}"
+                log_event(
+                    "info",
+                    "llm_success",
+                    stage=stage,
+                    provider=provider,
+                    model=model,
+                    credential_source=runtime_config.get("credential_source", "platform"),
                 )
                 return content
         except Exception as exc:
             category, message = _classify_exception(exc)
             _log_failure(stage, provider, model, category, message, next_action)
 
-    logger.error(
-        "LLM fallback engaged | provider=jarvis | reason=all_cloud_providers_failed"
+    log_event(
+        "error",
+        "llm_fallback_engaged",
+        provider="jarvis",
+        reason="all_cloud_providers_failed",
     )
     return None
 

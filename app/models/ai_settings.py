@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -14,6 +15,8 @@ class AISettings(Base):
     customer_name: Mapped[str] = mapped_column(String(255), default="")
     gemini_api_key: Mapped[str] = mapped_column(Text, default="")
     anthropic_api_key: Mapped[str] = mapped_column(Text, default="")
+    gemini_key_updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
+    anthropic_key_updated_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime)
     default_provider: Mapped[str] = mapped_column(String(50), default="gemini")
     default_model: Mapped[str] = mapped_column(String(100), default="gemini-2.5-flash")
     fallback_provider: Mapped[str] = mapped_column(String(50), default="anthropic")

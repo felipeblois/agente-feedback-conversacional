@@ -4,6 +4,7 @@ from ui import (
     api_get,
     configure_page,
     empty_state,
+    ensure_admin_access,
     format_dt,
     format_pct,
     format_score,
@@ -19,6 +20,7 @@ from ui import (
 
 
 configure_page("Dashboard", "D")
+ensure_admin_access()
 render_sidebar("dashboard")
 
 panel_header(
