@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AnalysisRequest(BaseModel):
@@ -10,6 +10,8 @@ class AnalysisRequest(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     summary: str
     top_positive_themes: List[str]
     top_negative_themes: List[str]
@@ -21,6 +23,3 @@ class AnalysisResponse(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
     created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True

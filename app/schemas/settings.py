@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AISettingsBase(BaseModel):
@@ -21,6 +21,8 @@ class AISettingsUpdate(AISettingsBase):
 
 
 class AISettingsResponse(AISettingsBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     gemini_key_configured: bool
     anthropic_key_configured: bool
@@ -28,9 +30,6 @@ class AISettingsResponse(AISettingsBase):
     anthropic_key_masked: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class AISettingsTestRequest(BaseModel):

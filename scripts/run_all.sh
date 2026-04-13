@@ -7,17 +7,23 @@ ensure_linux
 ensure_project_root
 ensure_venv
 ensure_database_schema
+ensure_port_free 8000 "api" "uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+ensure_port_free 8501 "streamlit" "streamlit run streamlit_app/Home.py"
 
 cleanup() {
     jobs -p | xargs -r kill
+    remove_pid "api"
+    remove_pid "streamlit"
 }
 
 trap cleanup EXIT INT TERM
 
 echo "Iniciando API em http://127.0.0.1:8000"
 run_python_module uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
+write_pid "api" "$!"
 
 echo "Iniciando Streamlit em http://127.0.0.1:8501"
 run_python_module streamlit run streamlit_app/Home.py --server.port 8501 --server.headless true --browser.gatherUsageStats false &
+write_pid "streamlit" "$!"
 
 wait

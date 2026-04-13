@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class SessionBase(BaseModel):
@@ -37,13 +37,12 @@ class SessionUpdate(BaseModel):
 
 
 class SessionResponse(SessionBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     public_token: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class SessionListResponse(SessionResponse):

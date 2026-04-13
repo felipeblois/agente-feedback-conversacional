@@ -249,11 +249,27 @@ class ConversationService:
 
         label = FEEDBACK_LABELS.get(session.score_type, "sessao")
         fallback_tail = {
-            "detractor": f"Qual melhoria mais aumentaria o valor deste {label} para voce?",
-            "neutral": f"Qual ajuste deixaria este {label} mais util para voce?",
-            "promoter": f"Que destaque positivo deste {label} voce acha importante registrar?",
+            "detractor": [
+                f"Qual melhoria mais aumentaria o valor deste {label} para voce?",
+                f"Se tivesse prioridade para corrigir um ponto deste {label}, qual seria?",
+                f"Qual ajuste pratico faria voce avaliar melhor este {label}?",
+            ],
+            "neutral": [
+                f"Qual ajuste deixaria este {label} mais util para voce?",
+                f"Que melhoria simples aumentaria o valor percebido deste {label}?",
+                f"Qual ponto voce gostaria de ver mais aprofundado neste {label}?",
+            ],
+            "promoter": [
+                f"Que destaque positivo deste {label} voce acha importante registrar?",
+                f"Que aspecto deste {label} mais merece ser mantido nas proximas edicoes?",
+                f"Qual ponto forte deste {label} mais contribuiu para sua nota?",
+            ],
         }
-        return fallback_tail.get(segment)
+        tail_questions = fallback_tail.get(segment, [])
+        tail_index = system_questions_asked - len(q_list)
+        if 0 <= tail_index < len(tail_questions):
+            return tail_questions[tail_index]
+        return None
 
     def _parse_llm_payload(self, raw_text: str) -> Optional[Dict[str, object]]:
         match = JSON_BLOCK_PATTERN.search(raw_text)
