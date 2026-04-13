@@ -89,8 +89,19 @@ def ensure_admin_access() -> None:
                 st.session_state[AUTH_ACTOR_KEY] = payload["actor"]
                 st.success("Acesso liberado com sucesso.")
                 st.rerun()
-            except Exception:
-                st.error("Credenciais invalidas.")
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 401:
+                    st.error("Credenciais invalidas.")
+                elif exc.response.status_code == 503:
+                    st.warning("A API esta acordando no Render. Aguarde alguns segundos e tente novamente.")
+                else:
+                    st.error(f"Nao foi possivel autenticar agora. API respondeu com status {exc.response.status_code}.")
+            except httpx.TimeoutException:
+                st.warning("A API demorou para responder. Em ambiente free no Render isso pode acontecer ao acordar o servico.")
+            except httpx.RequestError:
+                st.error(f"Nao foi possivel conectar na API configurada em {API_BASE}.")
+            except Exception as exc:
+                st.error(f"Falha inesperada ao autenticar: {exc.__class__.__name__}")
 
     if meta.get("uses_default_password"):
         st.warning(
