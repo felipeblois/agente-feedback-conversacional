@@ -16,7 +16,6 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "litellm",
-    "tokenizers<0.16.0",
     "httpx",
     "pandas",
     "python-dotenv",
