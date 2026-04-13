@@ -17,6 +17,7 @@ Padrao adotado:
 - Python 3.8+ dentro do WSL
 - API key do Gemini
 - API key da Anthropic para fallback cloud
+- credenciais do admin da instancia no `.env`
 
 ## Setup rapido
 
@@ -26,6 +27,30 @@ make setup
 scripts/doctor.sh
 ```
 
+## Protecao do admin
+
+O painel admin e os endpoints administrativos agora exigem autenticacao.
+
+Variaveis recomendadas no `.env`:
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `ADMIN_API_TOKEN` opcional
+- `INSTANCE_NAME`
+- `INSTANCE_ID`
+
+Se `ADMIN_API_TOKEN` ficar vazio, a aplicacao gera internamente um token administrativo a partir da configuracao da instancia.
+
+Bootstrap atual:
+- `ADMIN_USERNAME` e `ADMIN_PASSWORD` continuam sendo a credencial inicial da instancia
+- com esse bootstrap, o primeiro admin pode entrar no painel e cadastrar usuarios admin nominais
+- depois disso, o login pode ser feito tanto pelo bootstrap quanto pelos admins salvos no banco
+
+Antes de uso real com cliente:
+- troque a senha padrao `change-me-admin`
+- defina `INSTANCE_NAME` e `INSTANCE_ID` por instancia
+- revise as chaves Gemini e Anthropic da instancia
+- crie usuarios admin nominais para rastrear quem cria e opera sessoes
+
 ## Operacao diaria
 
 ```bash
@@ -34,14 +59,14 @@ cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 # diagnostico do ambiente
 scripts/doctor.sh
 
-# backend
-scripts/run_api.sh
+# iniciar stack completa
+scripts/start.sh
 
-# streamlit
-scripts/run_streamlit.sh
+# ver status
+scripts/status.sh
 
-# stack completa
-scripts/run_all.sh
+# parar stack
+scripts/stop_all.sh
 
 # testes
 scripts/test.sh
@@ -58,12 +83,21 @@ Compartilhe o link publico `http://localhost:8000/f/{token}` com os participante
 ### Visualizar resultados
 Acesse o painel admin em `http://localhost:8501`.
 
+### Operar sessoes no admin
+No painel Streamlit agora e possivel:
+- criar sessoes com briefing estruturado para IA
+- editar titulo, descricao, briefing e limite de aprofundamento
+- arquivar sessoes ativas
+- reativar sessoes arquivadas
+- acompanhar detalhe, respostas recentes e exportacoes
+
 ### Configurar credenciais da instancia
 Use a pagina `Configuracoes` no painel para definir se a instancia usa:
 - credenciais do cliente
 - credenciais da plataforma
 
 O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
+As alteracoes de settings passam a registrar uma trilha minima de auditoria no backend.
 
 ## Comandos disponiveis
 
@@ -77,7 +111,10 @@ O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
 | `make test` | Roda os testes |
 | `make seed` | Popula com dados de exemplo |
 | `scripts/doctor.sh` | Valida o ambiente WSL e a venv |
+| `scripts/start.sh` | Atalho para subir a stack completa |
 | `scripts/run_all.sh` | Aplica migrations e sobe API + Streamlit no mesmo terminal |
+| `scripts/status.sh` | Mostra status da stack e portas em uso |
+| `scripts/stop_all.sh` | Finaliza API e Streamlit da stack local |
 | `scripts/test.sh` | Executa os testes pela venv Linux |
 
 ## Estrategia de LLM

@@ -8,13 +8,104 @@ import httpx
 import streamlit as st
 import streamlit.components.v1 as components
 
+from app.core.security import get_admin_api_token, get_admin_runtime_meta
+
 
 API_BASE = "http://localhost:8000/api/v1"
+AUTH_STATE_KEY = "admin_authenticated"
+AUTH_TOKEN_KEY = "admin_api_token"
+AUTH_ACTOR_KEY = "admin_actor"
 
 
 def configure_page(title: str, icon: str) -> None:
     st.set_page_config(page_title=title, page_icon=icon, layout="wide")
     inject_theme()
+
+
+def ensure_admin_access() -> None:
+    if st.session_state.get(AUTH_STATE_KEY):
+        return
+
+    meta = get_admin_runtime_meta()
+    st.markdown(
+        """
+        <style>
+            .auth-shell {
+                max-width: 520px;
+                margin: 7vh auto 0 auto;
+                padding: 28px;
+                border-radius: 24px;
+                border: 1px solid rgba(167, 176, 211, 0.14);
+                background: linear-gradient(180deg, rgba(28, 31, 44, 0.98), rgba(21, 23, 33, 0.98));
+                box-shadow: 0 22px 46px rgba(0, 0, 0, 0.28);
+            }
+            .auth-title {
+                color: #f2f4fb;
+                font-size: 1.8rem;
+                font-weight: 700;
+                margin-bottom: 0.4rem;
+            }
+            .auth-copy {
+                color: #a6acc9;
+                line-height: 1.5;
+                margin-bottom: 1rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="auth-shell">
+            <div class="auth-title">Acesso do admin</div>
+            <div class="auth-copy">
+                Painel protegido da instancia <strong>{html.escape(str(meta["instance_name"]))}</strong>.
+                Entre com suas credenciais para continuar.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("admin_login_form"):
+        username = st.text_input("Usuario", value=meta["admin_username"])
+        password = st.text_input("Senha", type="password")
+        submitted = st.form_submit_button("Entrar", use_container_width=True)
+        if submitted:
+            try:
+                with httpx.Client(timeout=30.0) as client:
+                    response = client.post(
+                        f"{API_BASE}/settings/admin/login",
+                        json={"username": username, "password": password},
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                st.session_state[AUTH_STATE_KEY] = True
+                st.session_state[AUTH_TOKEN_KEY] = payload["token"]
+                st.session_state[AUTH_ACTOR_KEY] = payload["actor"]
+                st.success("Acesso liberado com sucesso.")
+                st.rerun()
+            except Exception:
+                st.error("Credenciais invalidas.")
+
+    if meta.get("uses_default_password"):
+        st.warning(
+            "Esta instancia ainda usa a senha padrao do admin. Antes de comercializar, altere ADMIN_PASSWORD no .env."
+        )
+    st.stop()
+
+
+def render_logout_control() -> None:
+    if st.sidebar.button("Sair", key="logout-admin", use_container_width=True):
+        st.session_state.pop(AUTH_STATE_KEY, None)
+        st.session_state.pop(AUTH_TOKEN_KEY, None)
+        st.session_state.pop(AUTH_ACTOR_KEY, None)
+        st.rerun()
+
+
+def _admin_headers() -> Dict[str, str]:
+    token = st.session_state.get(AUTH_TOKEN_KEY) or get_admin_api_token()
+    return {"X-Admin-Token": token}
 
 
 def inject_theme() -> None:
@@ -224,7 +315,11 @@ def inject_theme() -> None:
                 background: linear-gradient(180deg, rgba(92,140,255,0.98), rgba(64,111,236,1));
             }
 
-            .stSelectbox label, .stRadio label, .stTextInput label, .stTextArea label {
+            .stSelectbox label,
+            .stRadio label,
+            .stTextInput label,
+            .stTextArea label,
+            .stSlider label {
                 color: var(--muted);
                 font-weight: 600;
             }
@@ -254,7 +349,7 @@ def inject_theme() -> None:
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 1.45rem;
+                font-size: 1.05rem;
                 color: white;
                 flex-shrink: 0;
             }
@@ -402,12 +497,6 @@ def inject_theme() -> None:
                 font-size: 1rem;
             }
 
-            .insight-list {
-                margin: 0;
-                padding-left: 1rem;
-                color: var(--muted);
-            }
-
             .sidebar-block {
                 border: 1px solid var(--border);
                 border-radius: 16px;
@@ -427,6 +516,165 @@ def inject_theme() -> None:
                 font-size: 0.86rem;
                 line-height: 1.45;
             }
+
+            .spotlight-card {
+                position: relative;
+                overflow: hidden;
+                border: 1px solid var(--border);
+                border-radius: 22px;
+                padding: 22px;
+                background:
+                    radial-gradient(circle at top right, rgba(91, 140, 255, 0.22), transparent 34%),
+                    linear-gradient(180deg, rgba(35, 38, 53, 0.98), rgba(28, 31, 44, 0.98));
+                box-shadow: var(--card-shadow);
+                margin-bottom: 1rem;
+            }
+
+            .spotlight-label {
+                color: #9bb2ff;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                font-size: 0.74rem;
+                font-weight: 700;
+                margin-bottom: 0.8rem;
+            }
+
+            .spotlight-title {
+                color: var(--text);
+                font-size: 1.35rem;
+                font-weight: 700;
+                line-height: 1.2;
+                margin-bottom: 0.35rem;
+            }
+
+            .spotlight-copy {
+                color: var(--muted);
+                font-size: 0.95rem;
+                line-height: 1.5;
+                margin-bottom: 1rem;
+            }
+
+            .spotlight-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.55rem;
+            }
+
+            .meta-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                border-radius: 999px;
+                padding: 0.45rem 0.8rem;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(167, 176, 211, 0.12);
+                color: var(--muted);
+                font-size: 0.82rem;
+                font-weight: 600;
+            }
+
+            .stat-band {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                margin-bottom: 1rem;
+            }
+
+            .stat-band.compact {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .stat-tile {
+                border-radius: 16px;
+                border: 1px solid var(--border);
+                background: rgba(255,255,255,0.04);
+                padding: 14px 16px;
+            }
+
+            .stat-tile-label {
+                color: var(--muted);
+                font-size: 0.8rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 0.35rem;
+            }
+
+            .stat-tile-value {
+                color: var(--text);
+                font-size: 1.3rem;
+                font-weight: 700;
+                line-height: 1.1;
+                margin-bottom: 0.25rem;
+            }
+
+            .stat-tile-copy {
+                color: var(--muted);
+                font-size: 0.84rem;
+                line-height: 1.35;
+            }
+
+            .session-shell {
+                border: 1px solid var(--border);
+                border-radius: 22px;
+                padding: 20px;
+                background:
+                    linear-gradient(180deg, rgba(35, 38, 53, 0.98), rgba(28, 31, 44, 0.98));
+                box-shadow: var(--card-shadow);
+                margin-bottom: 1rem;
+            }
+
+            .session-topline {
+                display: flex;
+                justify-content: space-between;
+                gap: 1rem;
+                align-items: flex-start;
+                margin-bottom: 0.8rem;
+            }
+
+            .session-title {
+                color: var(--text);
+                font-size: 1.18rem;
+                font-weight: 700;
+                margin-bottom: 0.3rem;
+            }
+
+            .session-copy {
+                color: var(--muted);
+                font-size: 0.92rem;
+                line-height: 1.5;
+                margin-bottom: 0;
+            }
+
+            .session-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 12px;
+                margin-top: 1rem;
+            }
+
+            .session-cell {
+                border-radius: 16px;
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(167, 176, 211, 0.08);
+                padding: 12px 14px;
+            }
+
+            .session-cell-label {
+                color: var(--muted);
+                font-size: 0.78rem;
+                font-weight: 600;
+                margin-bottom: 0.2rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+
+            .session-cell-value {
+                color: var(--text);
+                font-size: 0.95rem;
+                line-height: 1.4;
+                font-weight: 600;
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -436,10 +684,11 @@ def inject_theme() -> None:
 def render_sidebar(current_page: str) -> None:
     st.sidebar.markdown("## Implantar")
     nav_items = [
-        ("dashboard", "Dashboard", "◧", "Home.py"),
-        ("sessions", "Sessoes", "🗂", "pages/1_Sessions.py"),
-        ("detail", "Analises", "📊", "pages/2_Session_Detail.py"),
-        ("settings", "Configuracoes", "⚙", "pages/3_Settings.py"),
+        ("dashboard", "Dashboard", "[D]", "Home.py"),
+        ("sessions", "Sessoes", "[S]", "pages/1_Sessions.py"),
+        ("detail", "Analises", "[A]", "pages/2_Session_Detail.py"),
+        ("archived", "Arquivadas", "[R]", "pages/4_Archived_Sessions.py"),
+        ("settings", "Configuracoes", "[C]", "pages/3_Settings.py"),
     ]
     for key, label, icon, page in nav_items:
         if key == current_page:
@@ -458,7 +707,10 @@ def render_sidebar(current_page: str) -> None:
         unsafe_allow_html=True,
     )
     st.sidebar.markdown("---")
-    st.sidebar.caption("⚙ Configuracoes em breve")
+    st.sidebar.caption("Configuracoes e operacao centralizadas no painel.")
+    if st.session_state.get(AUTH_ACTOR_KEY):
+        st.sidebar.caption(f"Conectado como {st.session_state[AUTH_ACTOR_KEY]}")
+    render_logout_control()
 
 
 def panel_header(eyebrow: str, title: str, subtitle: str) -> None:
@@ -549,35 +801,42 @@ def format_dt(value: Optional[str | datetime]) -> str:
 
 def api_get(path: str) -> Any:
     with httpx.Client(timeout=30.0) as client:
-        response = client.get(f"{API_BASE}{path}")
+        response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_post(path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
     with httpx.Client(timeout=60.0) as client:
-        response = client.post(f"{API_BASE}{path}", json=payload or {})
+        response = client.post(f"{API_BASE}{path}", json=payload or {}, headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_put(path: str, payload: Dict[str, Any]) -> Any:
     with httpx.Client(timeout=60.0) as client:
-        response = client.put(f"{API_BASE}{path}", json=payload)
+        response = client.put(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
+        response.raise_for_status()
+        return response.json()
+
+
+def api_patch(path: str, payload: Dict[str, Any]) -> Any:
+    with httpx.Client(timeout=60.0) as client:
+        response = client.patch(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
         response.raise_for_status()
         return response.json()
 
 
 def api_delete(path: str) -> Any:
     with httpx.Client(timeout=30.0) as client:
-        response = client.delete(f"{API_BASE}{path}")
+        response = client.delete(f"{API_BASE}{path}", headers=_admin_headers())
         response.raise_for_status()
         return response.json() if response.content else None
 
 
 def api_get_bytes(path: str) -> bytes:
     with httpx.Client(timeout=60.0) as client:
-        response = client.get(f"{API_BASE}{path}")
+        response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
         response.raise_for_status()
         return response.content
 
@@ -780,7 +1039,7 @@ def render_sessions_table(rows: Iterable[Dict[str, Any]]) -> None:
                     <div>Tipo</div>
                     <div>Respostas</div>
                     <div>Criada em</div>
-                    <div>Esperado</div>
+                    <div>Status</div>
                 </div>
                 {''.join(row_html)}
             </div>
@@ -789,11 +1048,7 @@ def render_sessions_table(rows: Iterable[Dict[str, Any]]) -> None:
     """
 
     row_count = max(len(items), 1)
-    components.html(
-        table_markup,
-        height=96 + (row_count * 96),
-        scrolling=False,
-    )
+    components.html(table_markup, height=96 + (row_count * 96), scrolling=False)
 
 
 def render_quick_tiles(items: Iterable[Dict[str, str]]) -> None:
@@ -885,30 +1140,129 @@ def render_insight_card(title: str, body: str) -> None:
     )
 
 
-def render_sidebar(current_page: str) -> None:
-    st.sidebar.markdown("## Implantar")
-    nav_items = [
-        ("dashboard", "Dashboard", "◧", "Home.py"),
-        ("sessions", "Sessoes", "🗂", "pages/1_Sessions.py"),
-        ("detail", "Analises", "📊", "pages/2_Session_Detail.py"),
-        ("archived", "Arquivadas", "🗃", "pages/4_Archived_Sessions.py"),
-        ("settings", "Configuracoes", "⚙", "pages/3_Settings.py"),
-    ]
-    for key, label, icon, page in nav_items:
-        if key == current_page:
-            st.sidebar.markdown(f"### {icon} {label}")
-        elif st.sidebar.button(f"{icon}  {label}", key=f"nav-{key}", use_container_width=True):
-            st.switch_page(page)
-
-    st.sidebar.markdown("")
-    st.sidebar.markdown(
-        """
-        <div class="sidebar-block">
-            <div class="sidebar-title">Workspace local</div>
-            <div class="sidebar-copy">Painel administrativo do agente com operacao em FastAPI, Streamlit e SQLite.</div>
+def render_spotlight_card(label: str, title: str, body: str, chips: Iterable[str]) -> None:
+    chip_markup = "".join(f'<span class="meta-chip">{html.escape(chip)}</span>' for chip in chips if chip)
+    st.markdown(
+        f"""
+        <div class="spotlight-card">
+            <div class="spotlight-label">{html.escape(label)}</div>
+            <div class="spotlight-title">{html.escape(title)}</div>
+            <div class="spotlight-copy">{html.escape(body)}</div>
+            <div class="spotlight-meta">{chip_markup}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.sidebar.markdown("---")
-    st.sidebar.caption("⚙ Configuracoes em breve")
+
+
+def render_stat_band(items: Iterable[Dict[str, str]], compact: bool = False) -> None:
+    entries = list(items)
+    if not entries:
+        return
+    column_template = "repeat(3, minmax(0, 1fr))" if compact else "repeat(4, minmax(0, 1fr))"
+    markup = "".join(
+        f"""
+        <div class="stat-tile">
+            <div class="stat-tile-label">{html.escape(item.get("label", ""))}</div>
+            <div class="stat-tile-value">{html.escape(item.get("value", "-"))}</div>
+            <div class="stat-tile-copy">{html.escape(item.get("copy", ""))}</div>
+        </div>
+        """
+        for item in entries
+    )
+    row_count = 1 if len(entries) <= 4 else 2
+    height = 108 if row_count == 1 else 204
+    components.html(
+        f"""
+        <html>
+            <head>
+                <style>
+                    body {{
+                        margin: 0;
+                        background: transparent;
+                        color: #f2f4fb;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                    }}
+
+                    .stat-band {{
+                        display: grid;
+                        grid-template-columns: {column_template};
+                        gap: 12px;
+                    }}
+
+                    .stat-tile {{
+                        border-radius: 16px;
+                        border: 1px solid rgba(167, 176, 211, 0.12);
+                        background: rgba(255,255,255,0.04);
+                        padding: 14px 16px;
+                        min-height: 86px;
+                        box-sizing: border-box;
+                    }}
+
+                    .stat-tile-label {{
+                        color: #a6acc9;
+                        font-size: 0.8rem;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                        letter-spacing: 0.05em;
+                        margin-bottom: 0.35rem;
+                    }}
+
+                    .stat-tile-value {{
+                        color: #f2f4fb;
+                        font-size: 1.3rem;
+                        font-weight: 700;
+                        line-height: 1.1;
+                        margin-bottom: 0.25rem;
+                    }}
+
+                    .stat-tile-copy {{
+                        color: #a6acc9;
+                        font-size: 0.84rem;
+                        line-height: 1.35;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="stat-band">{markup}</div>
+            </body>
+        </html>
+        """,
+        height=height,
+        scrolling=False,
+    )
+
+
+def render_session_card(
+    title: str,
+    description: str,
+    status_html: str,
+    chips: Iterable[str],
+    facts: Iterable[tuple[str, str]],
+) -> None:
+    chip_markup = "".join(f'<span class="meta-chip">{html.escape(chip)}</span>' for chip in chips if chip)
+    facts_markup = "".join(
+        f"""
+        <div class="session-cell">
+            <div class="session-cell-label">{html.escape(label)}</div>
+            <div class="session-cell-value">{html.escape(value)}</div>
+        </div>
+        """
+        for label, value in facts
+    )
+    st.markdown(
+        f"""
+        <div class="session-shell">
+            <div class="session-topline">
+                <div>
+                    <div class="session-title">{html.escape(title)}</div>
+                    <p class="session-copy">{html.escape(description)}</p>
+                </div>
+                <div>{status_html}</div>
+            </div>
+            <div class="spotlight-meta">{chip_markup}</div>
+            <div class="session-grid">{facts_markup}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
