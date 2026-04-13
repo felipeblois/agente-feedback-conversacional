@@ -25,6 +25,22 @@ document.addEventListener("DOMContentLoaded", () => {
         els.messages.scrollTop = els.messages.scrollHeight;
     }
 
+    function addThinkingMessage() {
+        const div = document.createElement("div");
+        div.className = "message system-msg";
+        div.innerText = "Pensando na proxima pergunta...";
+        div.dataset.thinking = "true";
+        els.messages.appendChild(div);
+        els.messages.scrollTop = els.messages.scrollHeight;
+    }
+
+    function removeThinkingMessage() {
+        const thinking = els.messages.querySelector('[data-thinking="true"]');
+        if (thinking) {
+            thinking.remove();
+        }
+    }
+
     function showInput(type) {
         els.inputArea.style.display = "block";
         if (type === "score") {
@@ -40,9 +56,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function handleNextQuestion(question) {
+        removeThinkingMessage();
         if (!question) {
             addMessage(
-                "Obrigado pelo seu tempo! Suas respostas nos ajudarão muito. Você pode fechar sua janela agora.",
+                "Obrigado pelo seu tempo! Suas respostas nos ajudarao muito. Voce pode fechar sua janela agora.",
                 "system",
             );
             document.body.classList.add("conversation-complete");
@@ -84,22 +101,27 @@ document.addEventListener("DOMContentLoaded", () => {
             const score = parseInt(event.target.dataset.score, 10);
             addMessage(score.toString(), "user");
             showInput("none");
+            addThinkingMessage();
 
             try {
                 const res = await fetch(`/api/v1/public/${token}/score`, {
                     method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ response_id: responseId, score }),
-            });
-            const data = await res.json();
-            if (data.conversation_finished) {
-                handleNextQuestion(null);
-            } else {
-                handleNextQuestion(data.next_question);
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ response_id: responseId, score }),
+                });
+                const data = await res.json();
+
+                if (data.conversation_finished) {
+                    handleNextQuestion(null);
+                } else {
+                    handleNextQuestion(data.next_question);
+                }
+            } catch (error) {
+                console.error(error);
+                removeThinkingMessage();
+                addMessage("Nao foi possivel continuar a conversa agora. Tente novamente em instantes.", "system");
+                showInput("score");
             }
-        } catch (error) {
-            console.error(error);
-        }
         });
     });
 
@@ -110,6 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
         els.textarea.value = "";
         addMessage(text, "user");
         showInput("none");
+        addThinkingMessage();
 
         try {
             const res = await fetch(`/api/v1/public/${token}/message`, {
@@ -126,6 +149,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         } catch (error) {
             console.error(error);
+            removeThinkingMessage();
+            addMessage("Houve uma falha temporaria ao gerar a proxima pergunta. Tente enviar novamente.", "system");
+            showInput("text");
         }
     });
 

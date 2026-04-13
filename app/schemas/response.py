@@ -22,6 +22,7 @@ class ScoreSubmit(BaseModel):
 class ScoreResponse(BaseModel):
     next_question: Optional[QuestionDetail] = None
     conversation_finished: bool = False
+    finish_reason: Optional[str] = None
 
 class MessageSubmit(BaseModel):
     response_id: int
@@ -30,6 +31,7 @@ class MessageSubmit(BaseModel):
 class MessageResponse(BaseModel):
     next_question: Optional[QuestionDetail] = None
     conversation_finished: bool
+    finish_reason: Optional[str] = None
 
 class FinishResponse(BaseModel):
     response_id: int

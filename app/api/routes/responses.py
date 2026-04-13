@@ -52,12 +52,19 @@ async def submit_score(public_token: str, data: ScoreSubmit, db: AsyncSession = 
     await response_service.update_score(db, data.response_id, data.score)
     
     # Get next question based on score
-    next_question = await conversation_service.get_next_question(db, data.response_id, session.max_followup_questions)
-    if next_question:
-        return ScoreResponse(next_question=next_question, conversation_finished=False)
+    next_step = await conversation_service.get_next_step(db, data.response_id, session.max_followup_questions)
+    if next_step["next_question"]:
+        return ScoreResponse(
+            next_question=next_step["next_question"],
+            conversation_finished=False,
+            finish_reason=next_step["finish_reason"],
+        )
 
     await response_service.mark_completed(db, data.response_id)
-    return ScoreResponse(conversation_finished=True)
+    return ScoreResponse(
+        conversation_finished=True,
+        finish_reason=next_step["finish_reason"],
+    )
 
 @router.post("/{public_token}/message", response_model=MessageResponse)
 async def submit_message(public_token: str, data: MessageSubmit, db: AsyncSession = Depends(get_db_session)):
@@ -67,13 +74,20 @@ async def submit_message(public_token: str, data: MessageSubmit, db: AsyncSessio
     await conversation_service.save_user_message(db, data.response_id, data.message)
     
     # Get next question if applicable
-    next_question = await conversation_service.get_next_question(db, data.response_id, session.max_followup_questions)
+    next_step = await conversation_service.get_next_step(db, data.response_id, session.max_followup_questions)
     
-    if next_question:
-        return MessageResponse(next_question=next_question, conversation_finished=False)
+    if next_step["next_question"]:
+        return MessageResponse(
+            next_question=next_step["next_question"],
+            conversation_finished=False,
+            finish_reason=next_step["finish_reason"],
+        )
     else:
         await response_service.mark_completed(db, data.response_id)
-        return MessageResponse(conversation_finished=True)
+        return MessageResponse(
+            conversation_finished=True,
+            finish_reason=next_step["finish_reason"],
+        )
 
 @router.post("/{public_token}/finish", response_model=StatusResponse)
 async def finish_conversation(public_token: str, data: FinishResponse, db: AsyncSession = Depends(get_db_session)):

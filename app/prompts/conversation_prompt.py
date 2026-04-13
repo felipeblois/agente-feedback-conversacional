@@ -41,6 +41,7 @@ def build_conversation_prompt(
         + f"- Perguntas de aprofundamento ja feitas: {system_questions_asked}\n"
         + f"- Limite maximo de perguntas de aprofundamento: {max_questions}\n"
         + f"- Perguntas restantes possiveis: {questions_remaining}\n"
+        + "- Antes de encerrar por contexto suficiente, garanta pelo menos 2 perguntas de aprofundamento, exceto quando o limite total for menor que 2.\n"
         + "- Se ja houver contexto suficiente ou o limite tiver sido atingido, responda com should_finish=true.\n"
         + "- Se ainda fizer sentido aprofundar, responda com should_finish=false e gere apenas a proxima pergunta.\n"
         + "- A pergunta deve ter no maximo 220 caracteres.\n"

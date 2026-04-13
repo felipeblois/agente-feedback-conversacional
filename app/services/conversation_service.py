@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import func, select
@@ -62,19 +62,92 @@ class ConversationService:
         text = f"De 0 a 10, como voce avalia este {label}?"
         return {"type": "score", "text": text}
 
-    async def _get_score_segment(self, score: int, max_val: int = 10) -> str:
-        if max_val == 10:
-            if score <= 6:
-                return "detractor"
-            if score <= 8:
-                return "neutral"
-            return "promoter"
+    async def get_next_step(
+        self,
+        db: AsyncSession,
+        response_id: int,
+        max_questions: int,
+    ) -> Dict[str, object]:
+        response, session = await self._load_response_context(db, response_id)
+        if not response or not session or response.score is None:
+            return {"next_question": None, "finished": True, "finish_reason": "missing_context"}
 
-        if score <= 3:
-            return "detractor"
-        if score == 4:
-            return "neutral"
-        return "promoter"
+        system_questions_asked = await self._count_system_questions(db, response_id)
+        minimum_required = self._minimum_required_questions(max_questions)
+        if system_questions_asked >= max_questions:
+            logger.info(
+                f"conversation_finished | response_id={response_id} | reason=max_questions_reached | "
+                f"questions_asked={system_questions_asked} | max_questions={max_questions}"
+            )
+            return {
+                "next_question": None,
+                "finished": True,
+                "finish_reason": "max_questions_reached",
+            }
+
+        llm_result = await self._generate_llm_decision(
+            db=db,
+            response_id=response_id,
+            session=session,
+            score=response.score,
+            system_questions_asked=system_questions_asked,
+            max_questions=max_questions,
+        )
+
+        if llm_result.get("should_finish") is True and system_questions_asked >= minimum_required:
+            logger.info(
+                f"conversation_finished | response_id={response_id} | reason=llm_sufficient_context | "
+                f"questions_asked={system_questions_asked} | minimum_required={minimum_required}"
+            )
+            return {
+                "next_question": None,
+                "finished": True,
+                "finish_reason": "llm_sufficient_context",
+            }
+
+        question_text = llm_result.get("question")
+        question_source = llm_result.get("source", "unknown")
+
+        if not question_text:
+            question_text = await self._build_fallback_question(
+                session=session,
+                score=response.score,
+                system_questions_asked=system_questions_asked,
+                max_questions=max_questions,
+            )
+            question_source = "fallback"
+
+        if not question_text:
+            finish_reason = (
+                "fallback_exhausted_after_minimum"
+                if system_questions_asked >= minimum_required
+                else "no_valid_question_available"
+            )
+            logger.info(
+                f"conversation_finished | response_id={response_id} | reason={finish_reason} | "
+                f"questions_asked={system_questions_asked} | minimum_required={minimum_required}"
+            )
+            return {"next_question": None, "finished": True, "finish_reason": finish_reason}
+
+        await self._save_system_question(db, response_id, question_text)
+        logger.info(
+            f"conversation_question_selected | response_id={response_id} | source={question_source} | "
+            f"question_index={system_questions_asked + 1} | max_questions={max_questions}"
+        )
+        return {
+            "next_question": {"type": "text", "text": question_text},
+            "finished": False,
+            "finish_reason": None,
+        }
+
+    async def get_next_question(
+        self,
+        db: AsyncSession,
+        response_id: int,
+        max_questions: int,
+    ) -> Optional[Dict[str, str]]:
+        result = await self.get_next_step(db, response_id, max_questions)
+        return result.get("next_question")  # backward compatible helper
 
     async def save_user_message(self, db: AsyncSession, response_id: int, text: str):
         result = await db.execute(
@@ -91,42 +164,6 @@ class ConversationService:
         )
         db.add(db_obj)
         await db.commit()
-
-    async def get_next_question(
-        self,
-        db: AsyncSession,
-        response_id: int,
-        max_questions: int,
-    ) -> Optional[Dict[str, str]]:
-        response, session = await self._load_response_context(db, response_id)
-        if not response or not session or response.score is None:
-            return None
-
-        system_questions_asked = await self._count_system_questions(db, response_id)
-        if system_questions_asked >= max_questions:
-            return None
-
-        llm_question = await self._generate_llm_question(
-            db=db,
-            response_id=response_id,
-            session=session,
-            score=response.score,
-            system_questions_asked=system_questions_asked,
-            max_questions=max_questions,
-        )
-        question_text = llm_question or await self._build_fallback_question(
-            db=db,
-            response_id=response_id,
-            session=session,
-            score=response.score,
-            system_questions_asked=system_questions_asked,
-        )
-
-        if not question_text:
-            return None
-
-        await self._save_system_question(db, response_id, question_text)
-        return {"type": "text", "text": question_text}
 
     async def _load_response_context(
         self,
@@ -169,7 +206,7 @@ class ConversationService:
         db.add(sys_msg)
         await db.commit()
 
-    async def _generate_llm_question(
+    async def _generate_llm_decision(
         self,
         db: AsyncSession,
         response_id: int,
@@ -177,7 +214,7 @@ class ConversationService:
         score: int,
         system_questions_asked: int,
         max_questions: int,
-    ) -> Optional[str]:
+    ) -> Dict[str, object]:
         history_text = await self._conversation_history_text(db, response_id)
         prompt = build_conversation_prompt(
             session=session,
@@ -197,29 +234,36 @@ class ConversationService:
             logger.warning(
                 f"conversation_fallback_engaged | response_id={response_id} | reason=gemini_unavailable"
             )
-            return None
+            return {"question": None, "should_finish": False, "source": "fallback"}
 
         parsed = self._parse_llm_payload(response)
         if not parsed:
             logger.warning(
                 f"conversation_fallback_engaged | response_id={response_id} | reason=invalid_llm_payload"
             )
-            return None
+            return {"question": None, "should_finish": False, "source": "fallback"}
 
-        if parsed.get("should_finish") is True:
-            return None
-
+        should_finish = bool(parsed.get("should_finish", False))
         question = self._sanitize_question(parsed.get("next_question", ""))
+
+        if should_finish:
+            logger.info(
+                f"conversation_llm_finish_signal | response_id={response_id} | "
+                f"question_index={system_questions_asked + 1}"
+            )
+            return {"question": None, "should_finish": True, "source": "gemini"}
+
         if not self._is_valid_question(question):
             logger.warning(
                 f"conversation_fallback_engaged | response_id={response_id} | reason=invalid_llm_question"
             )
-            return None
+            return {"question": None, "should_finish": False, "source": "fallback"}
 
         logger.info(
-            f"conversation_llm_success | response_id={response_id} | provider=gemini | question_index={system_questions_asked + 1}"
+            f"conversation_llm_success | response_id={response_id} | provider=gemini | "
+            f"question_index={system_questions_asked + 1}"
         )
-        return question
+        return {"question": question, "should_finish": False, "source": "gemini"}
 
     async def _conversation_history_text(self, db: AsyncSession, response_id: int) -> str:
         result = await db.execute(
@@ -235,41 +279,110 @@ class ConversationService:
 
     async def _build_fallback_question(
         self,
-        db: AsyncSession,
-        response_id: int,
         session: Session,
         score: int,
         system_questions_asked: int,
+        max_questions: int,
     ) -> Optional[str]:
         segment = await self._get_score_segment(score)
-        q_list = QUESTIONS_MAP.get(segment, QUESTIONS_MAP["neutral"])
+        generated_sequence = self._build_fallback_sequence(session, segment, max_questions)
+        if system_questions_asked < len(generated_sequence):
+            return generated_sequence[system_questions_asked]
+        return None
 
-        if system_questions_asked < len(q_list):
-            return q_list[system_questions_asked]
-
+    def _build_fallback_sequence(
+        self,
+        session: Session,
+        segment: str,
+        max_questions: int,
+    ) -> List[str]:
         label = FEEDBACK_LABELS.get(session.score_type, "sessao")
-        fallback_tail = {
+        base_questions = list(QUESTIONS_MAP.get(segment, QUESTIONS_MAP["neutral"]))
+
+        briefing_values = [
+            ("tema principal", session.theme_summary),
+            ("objetivo", session.session_goal),
+            ("publico", session.target_audience),
+            ("topicos", session.topics_to_explore),
+            ("orientacoes", session.ai_guidance),
+        ]
+
+        contextual_questions = []
+        for field_name, value in briefing_values:
+            if not value:
+                continue
+            snippet = value.strip().rstrip(".")
+            if field_name == "tema principal":
+                contextual_questions.append(
+                    f"Considerando o tema '{snippet}', qual ponto merecia mais destaque neste {label}?"
+                )
+            elif field_name == "objetivo":
+                contextual_questions.append(
+                    f"O objetivo '{snippet}' ficou claro e util neste {label}?"
+                )
+            elif field_name == "publico":
+                contextual_questions.append(
+                    f"Para o publico '{snippet}', o conteudo deste {label} foi bem direcionado?"
+                )
+            elif field_name == "topicos":
+                contextual_questions.append(
+                    f"Entre os topicos '{snippet}', qual deveria ter sido mais aprofundado neste {label}?"
+                )
+            elif field_name == "orientacoes":
+                contextual_questions.append(
+                    f"Seguindo a linha '{snippet}', o que mais agregou valor neste {label}?"
+                )
+
+        segment_tail = {
             "detractor": [
                 f"Qual melhoria mais aumentaria o valor deste {label} para voce?",
                 f"Se tivesse prioridade para corrigir um ponto deste {label}, qual seria?",
                 f"Qual ajuste pratico faria voce avaliar melhor este {label}?",
+                f"Qual parte deste {label} gerou mais frustracao ou atrito?",
             ],
             "neutral": [
                 f"Qual ajuste deixaria este {label} mais util para voce?",
                 f"Que melhoria simples aumentaria o valor percebido deste {label}?",
                 f"Qual ponto voce gostaria de ver mais aprofundado neste {label}?",
+                f"O que faltou para este {label} gerar mais impacto para voce?",
             ],
             "promoter": [
                 f"Que destaque positivo deste {label} voce acha importante registrar?",
                 f"Que aspecto deste {label} mais merece ser mantido nas proximas edicoes?",
                 f"Qual ponto forte deste {label} mais contribuiu para sua nota?",
+                f"Qual beneficio concreto deste {label} voce leva para a pratica?",
             ],
         }
-        tail_questions = fallback_tail.get(segment, [])
-        tail_index = system_questions_asked - len(q_list)
-        if 0 <= tail_index < len(tail_questions):
-            return tail_questions[tail_index]
-        return None
+
+        final_closer = [
+            f"Ha mais algum ponto importante sobre este {label} que voce gostaria de registrar?"
+        ]
+
+        sequence = []
+        for item in base_questions + contextual_questions + segment_tail.get(segment, []) + final_closer:
+            question = self._sanitize_question(item)
+            if self._is_valid_question(question) and question not in sequence:
+                sequence.append(question)
+            if len(sequence) >= max_questions:
+                break
+        return sequence
+
+    def _minimum_required_questions(self, max_questions: int) -> int:
+        return min(max_questions, 2)
+
+    async def _get_score_segment(self, score: int, max_val: int = 10) -> str:
+        if max_val == 10:
+            if score <= 6:
+                return "detractor"
+            if score <= 8:
+                return "neutral"
+            return "promoter"
+
+        if score <= 3:
+            return "detractor"
+        if score == 4:
+            return "neutral"
+        return "promoter"
 
     def _parse_llm_payload(self, raw_text: str) -> Optional[Dict[str, object]]:
         match = JSON_BLOCK_PATTERN.search(raw_text)
