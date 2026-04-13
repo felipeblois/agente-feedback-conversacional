@@ -27,9 +27,15 @@ scripts/ec2_run_admin.sh
 # 9. Conferir status
 scripts/ec2_status.sh
 
-# 10. Parar processos manuais quando terminar
+# 10. Ver logs
+scripts/ec2_logs.sh
+
+# 11. Instalar servicos permanentes
+scripts/ec2_install_systemd.sh
+
+# 12. Parar processos manuais quando terminar
 scripts/ec2_stop.sh
 
 # URLs esperadas no teste inicial
 # API local: http://127.0.0.1:8000
-# Admin local: http://127.0.0.1:8501
+# Admin local: http://127.0.0.1:8501/admin
