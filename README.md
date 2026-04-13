@@ -1,6 +1,6 @@
 # Agente de Feedback Conversacional - MVP
 
-Agente de feedback conversacional pos-apresentacao e treinamento. Coleta notas e respostas adaptativas dos participantes, analisa com IA e gera insights operacionais.
+Agente de feedback conversacional pos-apresentacao, treinamento e eventos internos. Coleta notas e respostas guiadas por IA, consolida sinais qualitativos e entrega leitura executiva para o time responsavel.
 
 ## Padrao operacional
 
@@ -26,6 +26,16 @@ cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
 make setup
 scripts/doctor.sh
 ```
+
+## Demo em 5 minutos
+
+1. Suba a stack com `scripts/start.sh`
+2. Acesse o painel admin em `http://localhost:8501`
+3. Entre com o bootstrap definido no `.env`
+4. Crie uma sessao com briefing estruturado
+5. Abra o link publico da sessao e simule 1 ou 2 respostas
+6. Volte ao detalhe da sessao e gere a analise
+7. Use o dashboard para contar a narrativa: criacao, coleta, insight e exportacao
 
 ## Protecao do admin
 
@@ -75,7 +85,11 @@ scripts/test.sh
 ## Fluxo de uso
 
 ### Criar uma sessao
-Acesse o Swagger UI em `http://localhost:8000/docs` e crie uma sessao via `POST /api/v1/sessions`.
+Use o painel admin em `http://localhost:8501` para criar sessoes com:
+- titulo e descricao
+- tipo de feedback
+- briefing estruturado para a IA
+- limite de perguntas de aprofundamento
 
 ### Coletar feedbacks
 Compartilhe o link publico `http://localhost:8000/f/{token}` com os participantes.
@@ -90,6 +104,8 @@ No painel Streamlit agora e possivel:
 - arquivar sessoes ativas
 - reativar sessoes arquivadas
 - acompanhar detalhe, respostas recentes e exportacoes
+- administrar usuarios nominais do painel
+- desativar, trocar senha e excluir admins nominais com auditoria minima
 
 ### Configurar credenciais da instancia
 Use a pagina `Configuracoes` no painel para definir se a instancia usa:
@@ -117,6 +133,16 @@ As alteracoes de settings passam a registrar uma trilha minima de auditoria no b
 | `scripts/stop_all.sh` | Finaliza API e Streamlit da stack local |
 | `scripts/test.sh` | Executa os testes pela venv Linux |
 
+## Roteiro recomendado para piloto
+
+1. Ajuste `INSTANCE_NAME`, `INSTANCE_ID`, `ADMIN_USERNAME` e `ADMIN_PASSWORD`
+2. Valide o ambiente com `scripts/doctor.sh`
+3. Cadastre ao menos um admin nominal para rastrear autoria das sessoes
+4. Gere uma sessao de demonstração com briefing claro e objetivo
+5. Simule respostas reais pelo link publico antes da apresentacao
+6. Valide a analise e as exportacoes antes da conversa com cliente
+7. Use o dashboard como tela de abertura e o detalhe da sessao como tela principal de valor
+
 ## Estrategia de LLM
 
 1. Gemini como provedor principal
@@ -131,6 +157,11 @@ Se os dois provedores cloud falharem, o sistema continua respondendo com a anali
 - O cliente pode salvar suas proprias credenciais no painel
 - Se preferir, a instancia pode usar as credenciais da plataforma
 - O fallback estatico Jarvis continua disponivel como failsafe
+
+## Documentacao complementar
+
+- `USER_MANUAL.md`: operacao do painel e do fluxo participante
+- `DEMO_PLAYBOOK.md`: roteiro curto para demos e pilotos assistidos
 
 ## Stack
 

@@ -1,45 +1,125 @@
 # Manual de Utilizacao - Agente de Feedback Conversacional
 
-Este manual detalha como operar o painel administrativo em Streamlit e como funciona o fluxo do participante no MVP do Agente de Feedback.
+Este manual foi pensado para operacao local, demos assistidas e pilotos com cliente. O foco e ajudar o admin a instalar, subir a stack e conduzir o fluxo completo sem ruido.
 
-## 1. Visao geral da arquitetura
+## 1. Portas e componentes
 
-O ecossistema e dividido em tres partes:
-1. Backend FastAPI na porta `8000`
-2. Sistema publico de chat para o participante
-3. Dashboard admin em Streamlit na porta `8501`
+- Backend FastAPI: `http://localhost:8000`
+- Painel admin em Streamlit: `http://localhost:8501`
+- Link publico do participante: `http://localhost:8000/f/{token}`
 
-## 2. Painel do administrador
+## 2. Preparacao inicial
 
-### Dashboard e sessoes
-- Crie novas sessoes com titulo, descricao e tipo de nota
-- Compartilhe o link publico `http://localhost:8000/f/{token}`
-- Acompanhe respostas, conclusao e analises no dashboard
+Antes da primeira execucao:
 
-### Configuracoes
-- Escolha entre credenciais do cliente e credenciais da plataforma
-- Salve Gemini e Anthropic por instancia
-- Teste a conectividade antes de operar a analise
+1. Ajuste o `.env` com as credenciais da instancia
+2. Defina pelo menos `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `INSTANCE_NAME` e `INSTANCE_ID`
+3. Salve a chave Gemini e, se desejado, a chave Anthropic
+4. Rode `make setup`
+5. Rode `scripts/doctor.sh`
 
-### Detalhe da sessao
-- Gere a analise com IA
-- Veja resumo executivo, temas, elogios, criticas e recomendacoes
-- Exporte CSV e PDF quando houver material disponivel
+## 3. Subida e operacao local
 
-## 3. Fluxo do participante
+Fluxo recomendado no WSL:
 
-1. O participante acessa o link publico
-2. Pode informar o nome opcionalmente
+```bash
+cd /mnt/c/Users/felip/Documents/projeto_1/agente-feedback-conversacional
+scripts/start.sh
+scripts/status.sh
+```
+
+Para encerrar:
+
+```bash
+scripts/stop_all.sh
+```
+
+## 4. Primeiro acesso ao painel
+
+1. Abra `http://localhost:8501`
+2. Entre com o bootstrap configurado no `.env`
+3. Acesse `Configuracoes`
+4. Cadastre admins nominais para rastrear quem opera a instancia
+
+O bootstrap deve ser tratado como acesso inicial e contingencia. Para uso real, prefira admins nominais.
+
+## 5. Criar uma sessao de feedback
+
+Na tela `Sessoes`, o admin pode:
+
+- definir titulo e descricao
+- escolher o tipo de feedback
+- preencher o briefing estruturado
+- informar tema principal, objetivo, publico e topicos
+- ajustar o limite de aprofundamento da IA
+
+O limite de aprofundamento controla quantas perguntas abertas a IA pode fazer ao participante.
+
+## 6. Fluxo do participante
+
+1. O participante acessa o link publico da sessao
+2. Pode informar o nome ou seguir como anonimo
 3. Responde a nota principal
-4. Continua o chat com perguntas de aprofundamento
-5. Recebe a mensagem final de encerramento
+4. A IA conduz perguntas de aprofundamento de acordo com o briefing
+5. O fluxo termina com a tela de agradecimento
 
-## 4. Estrategia de inteligencia artificial
+## 7. Operacao do detalhe da sessao
 
-O projeto usa uma cascata simples e comercializavel:
+Na tela `Detalhe da sessao`, o admin consegue:
 
-1. Gemini como provedor principal
-2. Anthropic como fallback cloud
-3. Fallback estatico como failsafe final
+- acompanhar respostas e taxa de conclusao
+- ver distribuicao de notas
+- revisar respostas recentes
+- gerar analise com IA
+- exportar CSV e PDF
+- editar briefing e configuracoes da sessao
+- arquivar ou excluir a sessao
 
-Se os dois provedores cloud falharem, o sistema continua gerando uma analise simplificada local para nao quebrar a operacao.
+## 8. Sessoes arquivadas
+
+As sessoes arquivadas vao para a area `Sessoes arquivadas`, onde o time pode:
+
+- consultar o historico
+- revisar insights
+- reativar a sessao se necessario
+
+## 9. Administracao de usuarios
+
+Na tela `Configuracoes`, o admin pode:
+
+- criar admin nominal
+- desativar ou reativar usuarios
+- trocar senha
+- excluir admin nominal
+
+Protecoes importantes:
+
+- o usuario conectado nao pode se autoexcluir
+- a autoria das sessoes continua preservada mesmo se um admin nominal for excluido
+- alteracoes sensiveis entram na auditoria minima do sistema
+
+## 10. Motores de analise
+
+O runtime atual segue esta ordem:
+
+1. Gemini
+2. Anthropic
+3. Jarvis como fallback estatico
+
+Se os provedores cloud falharem, o sistema tenta preservar a experiencia com o fallback local.
+
+## 11. Roteiro de demo sugerido
+
+1. Abra o dashboard para contextualizar o produto
+2. Mostre a criacao de uma sessao com briefing estruturado
+3. Abra o link publico e simule uma resposta
+4. Volte ao detalhe e gere a analise
+5. Encerre mostrando resumo executivo, temas e exportacoes
+
+## 12. Checklist de estabilidade antes de apresentar
+
+- `scripts/doctor.sh` executado sem erro
+- API respondendo em `http://localhost:8000/health`
+- painel abrindo em `http://localhost:8501`
+- pelo menos uma sessao pronta para demo
+- analise e exportacoes validadas antes da reuniao
