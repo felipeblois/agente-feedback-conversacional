@@ -77,13 +77,14 @@ def ensure_admin_access() -> None:
         submitted = st.form_submit_button("Entrar", use_container_width=True)
         if submitted:
             try:
-                with httpx.Client(timeout=30.0) as client:
-                    response = client.post(
-                        f"{API_BASE}/settings/admin/login",
-                        json={"username": username, "password": password},
-                    )
-                    response.raise_for_status()
-                    payload = response.json()
+                with st.spinner("Conectando com a API e validando credenciais..."):
+                    with httpx.Client(timeout=75.0) as client:
+                        response = client.post(
+                            f"{API_BASE}/settings/admin/login",
+                            json={"username": username, "password": password},
+                        )
+                        response.raise_for_status()
+                        payload = response.json()
                 st.session_state[AUTH_STATE_KEY] = True
                 st.session_state[AUTH_TOKEN_KEY] = payload["token"]
                 st.session_state[AUTH_ACTOR_KEY] = payload["actor"]
@@ -97,7 +98,9 @@ def ensure_admin_access() -> None:
                 else:
                     st.error(f"Nao foi possivel autenticar agora. API respondeu com status {exc.response.status_code}.")
             except httpx.TimeoutException:
-                st.warning("A API demorou para responder. Em ambiente free no Render isso pode acontecer ao acordar o servico.")
+                st.warning(
+                    "A API demorou para responder. Em ambiente free no Render isso pode acontecer ao acordar o servico. Aguarde alguns segundos e tente novamente."
+                )
             except httpx.RequestError:
                 st.error(f"Nao foi possivel conectar na API configurada em {API_BASE}.")
             except Exception as exc:
