@@ -16,7 +16,6 @@ from ui import (
     render_kpi_card,
     render_session_card,
     render_sidebar,
-    render_spotlight_card,
     render_stat_band,
     status_pill,
     push_flash,
@@ -88,44 +87,6 @@ if not filtered_archived:
     )
     st.stop()
 
-lead_session = filtered_archived[0]
-render_spotlight_card(
-    "Arquivo operacional",
-    lead_session["title"],
-    lead_session.get("description") or "Sessao arquivada pronta para consulta e eventual reativacao.",
-    [
-        str(lead_session.get("score_type", "")).replace("_", " ").title(),
-        f"{lead_session['response_count']} respostas",
-        f"{format_pct(lead_session['completion_rate'])} de conclusao",
-        lead_session.get("target_audience") or "Publico nao informado",
-    ],
-)
-
-render_stat_band(
-    [
-        {
-            "label": "Arquivadas",
-            "value": str(len(archived_sessions)),
-            "copy": "Sessoes preservadas no historico.",
-        },
-        {
-            "label": "Filtradas",
-            "value": str(len(filtered_archived)),
-            "copy": "Resultado atual da busca.",
-        },
-        {
-            "label": "Respostas",
-            "value": str(sum(item["response_count"] for item in filtered_archived)),
-            "copy": "Volume total das sessoes visiveis.",
-        },
-        {
-            "label": "Analises",
-            "value": str(sum(item["analysis_count"] for item in filtered_archived)),
-            "copy": "Leituras concluidas no historico.",
-        },
-    ]
-)
-
 archived_ids = [session["id"] for session in filtered_archived]
 default_archived_id = st.session_state.get("selected_archived_session_id", archived_ids[0])
 if default_archived_id not in archived_ids:
@@ -160,7 +121,7 @@ with kpi_cols[2]:
 with kpi_cols[3]:
     render_kpi_card("AVG", "Score medio", format_score(detail.get("avg_score")), "Media registrada", "purple")
 
-header_cols = st.columns([3.3, 1.2])
+header_cols = st.columns([4.1, 1.35], gap="small")
 with header_cols[0]:
     render_session_card(
         title=detail["title"],
