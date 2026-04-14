@@ -1,5 +1,7 @@
 from functools import lru_cache
+from typing import List
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +14,10 @@ class Settings(BaseSettings):
     api_port: int = 8000
     streamlit_port: int = 8501
     database_url: str = "sqlite+aiosqlite:///./data/feedback_agent.db"
+    api_base_url: str = "http://localhost:8000"
+    admin_base_url: str = "http://localhost:8501"
+    public_base_url: str = "http://localhost:8000"
+    cors_allowed_origins: str = ""
     admin_username: str = "admin"
     admin_password: str = "change-me-admin"
     admin_api_token: str = ""
@@ -29,6 +35,45 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        raw = (value or "").strip()
+        if raw.startswith("postgres://"):
+            return raw.replace("postgres://", "postgresql+asyncpg://", 1)
+        if raw.startswith("postgresql://") and "+asyncpg" not in raw:
+            return raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return raw
+
+    @property
+    def api_base_url_clean(self) -> str:
+        return self.api_base_url.rstrip("/")
+
+    @property
+    def admin_base_url_clean(self) -> str:
+        return self.admin_base_url.rstrip("/")
+
+    @property
+    def public_base_url_clean(self) -> str:
+        return self.public_base_url.rstrip("/")
+
+    @property
+    def cors_origins(self) -> List[str]:
+        configured = [item.strip() for item in self.cors_allowed_origins.split(",") if item.strip()]
+        defaults = [
+            self.admin_base_url_clean,
+            self.api_base_url_clean,
+            "http://localhost:8501",
+            "http://localhost:8000",
+            "http://127.0.0.1:8501",
+            "http://127.0.0.1:8000",
+        ]
+        seen = []
+        for origin in configured + defaults:
+            if origin and origin not in seen:
+                seen.append(origin)
+        return seen
 
 
 @lru_cache

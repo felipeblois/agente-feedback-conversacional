@@ -16,7 +16,6 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "litellm",
-    "tokenizers<0.16.0",
     "httpx",
     "pandas",
     "python-dotenv",
@@ -25,6 +24,7 @@ dependencies = [
     "jinja2",
     "python-multipart",
     "aiosqlite",
+    "asyncpg",
     "streamlit",
     "plotly",
 ]

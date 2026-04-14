@@ -27,6 +27,58 @@ make setup
 scripts/doctor.sh
 ```
 
+## Ambientes
+
+Use configuracoes separadas para local e EC2.
+
+No uso local com WSL, o `.env` deve apontar para `localhost`:
+
+```env
+APP_ENV=local
+INSTANCE_NAME=local-instance
+INSTANCE_ID=local-default
+API_BASE_URL=http://localhost:8000
+ADMIN_BASE_URL=http://localhost:8501
+PUBLIC_BASE_URL=http://localhost:8000
+CORS_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
+```
+
+Para EC2, use um arquivo de referencia separado como `deploy/env/.env.ec2.example` e depois copie os valores corretos para o `.env` da instancia.
+
+## Deploy no Render
+
+O projeto agora ja vem preparado para uma primeira hospedagem no Render com:
+- `render.yaml` para API, admin e banco
+- suporte a `DATABASE_URL` em Postgres
+- URLs publicas configuraveis por ambiente
+- CORS e links publicos sem dependencia de `localhost`
+
+Variaveis principais para cloud:
+- `DATABASE_URL`
+- `API_BASE_URL`
+- `PUBLIC_BASE_URL`
+- `ADMIN_BASE_URL`
+- `CORS_ALLOWED_ORIGINS`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `GEMINI_API_KEY`
+- `ANTHROPIC_API_KEY`
+
+Fluxo recomendado no Render:
+
+1. Conecte o repositorio ao Render
+2. Crie os servicos usando o `render.yaml`
+3. Revise os nomes publicos gerados e ajuste as URLs caso o slug final mude
+4. Preencha as variaveis sensiveis marcadas com `sync: false`
+5. Aguarde o deploy da API e do admin
+6. Valide `https://<api>/health`
+7. Acesse `https://<admin>` e entre com o bootstrap
+
+Observacao:
+- o plano free do Render pode dormir por inatividade
+- a primeira versao para cloud foi preparada para demo, homologacao e validacao externa
+- para operacao mais estavel no futuro, a migracao para plano pago ou outra infra continua recomendada
+
 ## Demo em 5 minutos
 
 1. Suba a stack com `scripts/start.sh`

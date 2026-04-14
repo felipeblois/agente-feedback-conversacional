@@ -1,9 +1,10 @@
-import os
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
+
 import pandas as pd
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
-from datetime import datetime
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -12,9 +13,12 @@ from app.models.message import Message
 from app.models.session import Session
 from app.services.analysis_service import analysis_service
 
-os.makedirs("data/exports", exist_ok=True)
-
 class ExportService:
+    def __init__(self) -> None:
+        self.export_dir = Path("data/exports")
+        self.export_dir.mkdir(parents=True, exist_ok=True)
+        self.keep_reports_per_session = 2
+
     async def generate_csv(self, db: AsyncSession, session_id: int) -> Optional[str]:
         stmt = select(Message, Response.score).join(Response).where(Response.session_id == session_id, Message.sender == "participant")
         result = await db.execute(stmt)
@@ -77,8 +81,36 @@ class ExportService:
         themes = ", ".join(analysis["top_positive_themes"])
         pdf.multi_cell(0, 10, f"Temas Frequentes: {themes if themes else 'Nenhum'}")
         
-        filepath = f"data/exports/session_{session_id}_report_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-        pdf.output(filepath)
-        return filepath
+        self.export_dir.mkdir(parents=True, exist_ok=True)
+        filepath = self.export_dir / f"session_{session_id}_report_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.pdf"
+        pdf.output(str(filepath))
+        self._cleanup_old_reports(session_id)
+        return str(filepath)
+
+    def delete_session_exports(self, session_id: int) -> int:
+        removed = 0
+        for file_path in self._session_report_files(session_id):
+            try:
+                file_path.unlink()
+                removed += 1
+            except FileNotFoundError:
+                continue
+        return removed
+
+    def _cleanup_old_reports(self, session_id: int) -> None:
+        report_files = self._session_report_files(session_id)
+        for file_path in report_files[self.keep_reports_per_session:]:
+            try:
+                file_path.unlink()
+            except FileNotFoundError:
+                continue
+
+    def _session_report_files(self, session_id: int) -> List[Path]:
+        pattern = f"session_{session_id}_report_*.pdf"
+        return sorted(
+            self.export_dir.glob(pattern),
+            key=lambda item: item.name,
+            reverse=True,
+        )
 
 export_service = ExportService()

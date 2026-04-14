@@ -1,0 +1,73 @@
+services:
+  - type: web
+    name: feedback-agent-api
+    runtime: python
+    plan: free
+    buildCommand: pip install .
+    startCommand: bash -lc "python -m alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: APP_ENV
+        value: production
+      - key: INSTANCE_NAME
+        value: render-instance
+      - key: INSTANCE_ID
+        value: render-default
+      - key: DATABASE_URL
+        fromDatabase:
+          name: feedback-agent-db
+          property: connectionString
+      - key: API_BASE_URL
+        value: https://feedback-agent-api.onrender.com
+      - key: PUBLIC_BASE_URL
+        value: https://feedback-agent-api.onrender.com
+      - key: ADMIN_BASE_URL
+        value: https://feedback-agent-admin.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://feedback-agent-admin.onrender.com
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_API_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  - type: web
+    name: feedback-agent-admin
+    runtime: python
+    plan: free
+    buildCommand: pip install .
+    startCommand: streamlit run streamlit_app/Home.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: APP_ENV
+        value: production
+      - key: INSTANCE_NAME
+        value: render-instance
+      - key: INSTANCE_ID
+        value: render-default
+      - key: API_BASE_URL
+        value: https://feedback-agent-api.onrender.com
+      - key: PUBLIC_BASE_URL
+        value: https://feedback-agent-api.onrender.com
+      - key: ADMIN_BASE_URL
+        value: https://feedback-agent-admin.onrender.com
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_API_TOKEN
+        sync: false
+
+databases:
+  - name: feedback-agent-db
+    databaseName: feedback_agent
+    user: feedback_agent
+    plan: free

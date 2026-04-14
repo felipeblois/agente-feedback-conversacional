@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.analysis_run import AnalysisRun
 from app.models.message import Message
 from app.models.participant import Participant
@@ -11,6 +12,7 @@ from app.models.response import Response
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
 from app.services.analysis_service import analysis_service
+from app.services.export_service import export_service
 
 
 class SessionService:
@@ -133,9 +135,10 @@ class SessionService:
             )
 
         latest_analysis = await analysis_service.get_latest(db, session_id)
+        settings = get_settings()
         detail.update(
             {
-                "public_url": f"http://localhost:8000/f/{session.public_token}",
+                "public_url": f"{settings.public_base_url_clean}/f/{session.public_token}",
                 "score_distribution": score_distribution,
                 "recent_responses": recent_responses,
                 "latest_analysis_summary": latest_analysis.get("summary") if latest_analysis else None,
@@ -165,6 +168,7 @@ class SessionService:
         if db_obj:
             await db.delete(db_obj)
             await db.commit()
+            export_service.delete_session_exports(id)
 
     async def archive(self, db: AsyncSession, id: int, actor: Optional[str] = None) -> Optional[Session]:
         db_obj = await self.get(db, id)

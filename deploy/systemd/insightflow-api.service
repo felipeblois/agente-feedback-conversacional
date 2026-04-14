@@ -1,0 +1,17 @@
+[Unit]
+Description=Insightflow API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/apps/agente-feedback-conversacional
+EnvironmentFile=/home/ubuntu/apps/agente-feedback-conversacional/.env
+ExecStartPre=/home/ubuntu/apps/agente-feedback-conversacional/scripts/ec2_sync_public_ip.sh --quiet
+ExecStart=/home/ubuntu/apps/agente-feedback-conversacional/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
