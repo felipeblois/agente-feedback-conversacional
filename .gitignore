@@ -23,6 +23,7 @@ data/*.db-wal
 
 # Logs
 data/logs/
+data/run/
 
 # IDE
 .vscode/
