@@ -23,6 +23,22 @@ scripts/ec2_logs.sh admin
 scripts/ec2_logs.sh nginx
 ```
 
+## Sincronizar IP publico no .env
+
+Quando o IP publico da EC2 mudar, atualize o `.env` com:
+
+```bash
+scripts/ec2_sync_public_ip.sh
+```
+
+Se quiser atualizar e reiniciar a aplicacao em seguida:
+
+```bash
+scripts/ec2_sync_public_ip.sh --restart
+```
+
+Os servicos `systemd` do projeto tambem executam essa sincronizacao automaticamente antes de subir API e admin.
+
 ## Transformar em servico permanente
 
 ```bash

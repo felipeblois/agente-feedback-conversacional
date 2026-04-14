@@ -1,12 +1,14 @@
 [Unit]
 Description=Insightflow Admin
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/apps/agente-feedback-conversacional
 EnvironmentFile=/home/ubuntu/apps/agente-feedback-conversacional/.env
+ExecStartPre=/home/ubuntu/apps/agente-feedback-conversacional/scripts/ec2_sync_public_ip.sh --quiet
 ExecStart=/home/ubuntu/apps/agente-feedback-conversacional/.venv/bin/python -m streamlit run streamlit_app/Home.py --server.port 8501 --server.address 127.0.0.1 --server.headless true --browser.gatherUsageStats false --server.enableCORS false --server.enableXsrfProtection false --server.baseUrlPath admin
 Restart=always
 RestartSec=5

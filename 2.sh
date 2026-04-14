@@ -30,10 +30,13 @@ scripts/ec2_status.sh
 # 10. Ver logs
 scripts/ec2_logs.sh
 
-# 11. Instalar servicos permanentes
+# 11. Sincronizar IP publico da EC2 no .env
+scripts/ec2_sync_public_ip.sh
+
+# 12. Instalar servicos permanentes
 scripts/ec2_install_systemd.sh
 
-# 12. Parar processos manuais quando terminar
+# 13. Parar processos manuais quando terminar
 scripts/ec2_stop.sh
 
 # URLs esperadas no teste inicial

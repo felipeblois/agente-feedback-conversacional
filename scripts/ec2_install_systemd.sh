@@ -8,6 +8,10 @@ SYSTEMD_DIR="${PROJECT_ROOT}/deploy/systemd"
 echo "Instalando units systemd..."
 sudo cp "${SYSTEMD_DIR}/insightflow-api.service" /etc/systemd/system/insightflow-api.service
 sudo cp "${SYSTEMD_DIR}/insightflow-admin.service" /etc/systemd/system/insightflow-admin.service
+sudo chmod +x "${PROJECT_ROOT}/scripts/ec2_sync_public_ip.sh"
+
+echo "Sincronizando IP publico no .env antes de habilitar servicos..."
+"${PROJECT_ROOT}/scripts/ec2_sync_public_ip.sh"
 
 echo "Recarregando systemd..."
 sudo systemctl daemon-reload
