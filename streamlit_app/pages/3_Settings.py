@@ -49,28 +49,23 @@ panel_header(
 try:
     config = api_get("/settings/ai")
     security_meta = api_get("/settings/admin/meta")
-    audit_logs = api_get("/settings/ai/audit")
-    operational_audit = api_get("/settings/audit")
     admin_users = api_get("/settings/admin/users")
 except Exception as exc:
     render_friendly_error(exc)
     st.stop()
 
-mode_options = {
-    "platform": "Usar credenciais da plataforma",
-    "customer": "Usar credenciais do cliente",
-}
-
 provider_options = {
     "gemini": "Gemini",
     "openai": "OpenAI",
     "anthropic": "Claude",
+    "fallback": "Jarvis",
 }
 
 provider_models = {
     "gemini": ["gemini-2.5-flash"],
     "openai": ["gpt-4.1-mini"],
     "anthropic": ["claude-3-5-haiku-20241022"],
+    "fallback": ["auto"],
 }
 
 col_form, col_test = st.columns([1.45, 1])
@@ -78,15 +73,9 @@ col_form, col_test = st.columns([1.45, 1])
 with col_form:
     st.markdown("### Configuracao principal")
     with st.form("ai_settings_form"):
-        mode = st.radio(
-            "Origem das credenciais",
-            options=list(mode_options.keys()),
-            index=list(mode_options.keys()).index(config["credential_mode"]),
-            format_func=lambda key: mode_options[key],
-        )
         customer_name = st.text_input("Nome do cliente", value=config.get("customer_name", ""))
         default_provider = st.selectbox(
-            "Motor principal",
+            "Motor principal:",
             options=list(provider_options.keys()),
             index=list(provider_options.keys()).index(config.get("default_provider", "gemini")),
             format_func=lambda key: provider_options[key],
@@ -97,9 +86,9 @@ with col_form:
             index=0,
         )
         fallback_provider = st.selectbox(
-            "Motor de fallback",
+            "Motor de fallback:",
             options=list(provider_options.keys()),
-            index=list(provider_options.keys()).index(config.get("fallback_provider", "anthropic")),
+            index=list(provider_options.keys()).index(config.get("fallback_provider", "fallback")),
             format_func=lambda key: provider_options[key],
         )
         fallback_model = st.selectbox(
@@ -138,7 +127,7 @@ with col_form:
         if submitted:
             try:
                 payload = {
-                    "credential_mode": mode,
+                    "credential_mode": config.get("credential_mode", "platform"),
                     "customer_name": customer_name,
                     "default_provider": default_provider,
                     "default_model": default_model,
@@ -162,39 +151,12 @@ with col_form:
 with col_test:
     st.markdown("### Estado atual")
     st.info(
-        f"Modo: {mode_options.get(config['credential_mode'], config['credential_mode'])}\n\n"
         f"Principal: {provider_options.get(config['default_provider'], config['default_provider'])}\n\n"
         f"Fallback: {provider_options.get(config['fallback_provider'], config['fallback_provider'])}\n\n"
-        f"Politica: {config.get('credential_policy_label', '-')}\n\n"
         f"Gemini configurado: {'Sim' if config['gemini_key_configured'] else 'Nao'}\n\n"
         f"OpenAI configurado: {'Sim' if config['openai_key_configured'] else 'Nao'}\n\n"
         f"Anthropic configurado: {'Sim' if config['anthropic_key_configured'] else 'Nao'}"
     )
-    st.caption(
-        f"Gemini efetivo: {config.get('effective_gemini_credential_source', '-')} | "
-        f"OpenAI efetivo: {config.get('effective_openai_credential_source', '-')} | "
-        f"Anthropic efetivo: {config.get('effective_anthropic_credential_source', '-')}"
-    )
-    st.caption(
-        f"Cliente Gemini: {'Sim' if config.get('customer_gemini_key_configured') else 'Nao'} | "
-        f"Cliente OpenAI: {'Sim' if config.get('customer_openai_key_configured') else 'Nao'} | "
-        f"Cliente Anthropic: {'Sim' if config.get('customer_anthropic_key_configured') else 'Nao'}"
-    )
-    st.caption(
-        f"Plataforma Gemini: {'Sim' if config.get('platform_gemini_key_configured') else 'Nao'} | "
-        f"Plataforma OpenAI: {'Sim' if config.get('platform_openai_key_configured') else 'Nao'} | "
-        f"Plataforma Anthropic: {'Sim' if config.get('platform_anthropic_key_configured') else 'Nao'}"
-    )
-    st.caption(
-        f"Instancia: {security_meta['instance_name']} ({security_meta['instance_id']}) | "
-        f"Bootstrap: {security_meta['admin_username']}"
-    )
-    st.caption(
-        f"Ultima rotacao Gemini: {format_dt(config.get('gemini_key_updated_at'))} | "
-        f"OpenAI: {format_dt(config.get('openai_key_updated_at'))} | "
-        f"Anthropic: {format_dt(config.get('anthropic_key_updated_at'))}"
-    )
-    st.caption("As chaves do cliente ficam mascaradas no painel e o runtime evita expor segredos em respostas e logs.")
     if security_meta.get("uses_default_password"):
         st.warning("O bootstrap ainda usa uma senha simples. Ajuste ADMIN_PASSWORD no .env antes do uso com cliente.")
 
@@ -226,29 +188,11 @@ with col_test:
         except Exception as exc:
             render_friendly_error(exc)
 
-    st.markdown("### Auditoria minima")
-    if audit_logs.get("items"):
-        for item in audit_logs["items"][:8]:
-            st.markdown(f"- `{format_dt(item['created_at'])}` | `{item['actor']}` | `{item['details']}`")
-    else:
-        st.caption("Nenhuma alteracao auditada ainda.")
-
-    st.markdown("### Atividade operacional")
-    if operational_audit.get("items"):
-        for item in operational_audit["items"][:10]:
-            st.markdown(
-                f"- `{format_dt(item['created_at'])}` | `{item['area']}` | `{item['action']}` | `{item['actor']}`"
-            )
-            st.caption(item["details"])
-    else:
-        st.caption("Nenhuma atividade operacional registrada ainda.")
-
 st.markdown("### Usuarios admin")
 admin_col, list_col = st.columns([1.05, 1.55])
 
 with admin_col:
     st.markdown("#### Novo admin nominal")
-    st.caption("Use o bootstrap apenas para subida inicial. Os admins nominais ajudam a rastrear autoria e operacao.")
     with st.form("create_admin_user_form", clear_on_submit=True):
         username = st.text_input("Novo usuario admin")
         full_name = st.text_input("Nome nominal")
