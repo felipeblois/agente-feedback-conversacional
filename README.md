@@ -27,6 +27,24 @@ make setup
 scripts/doctor.sh
 ```
 
+## Ambientes
+
+Use configuracoes separadas para local e EC2.
+
+No uso local com WSL, o `.env` deve apontar para `localhost`:
+
+```env
+APP_ENV=local
+INSTANCE_NAME=local-instance
+INSTANCE_ID=local-default
+API_BASE_URL=http://localhost:8000
+ADMIN_BASE_URL=http://localhost:8501
+PUBLIC_BASE_URL=http://localhost:8000
+CORS_ALLOWED_ORIGINS=http://localhost:8501,http://127.0.0.1:8501
+```
+
+Para EC2, use um arquivo de referencia separado como `deploy/env/.env.ec2.example` e depois copie os valores corretos para o `.env` da instancia.
+
 ## Deploy no Render
 
 O projeto agora ja vem preparado para uma primeira hospedagem no Render com:

@@ -94,12 +94,12 @@ def ensure_admin_access() -> None:
                 if exc.response.status_code == 401:
                     st.error("Credenciais invalidas.")
                 elif exc.response.status_code == 503:
-                    st.warning("A API esta acordando no Render. Aguarde alguns segundos e tente novamente.")
+                    st.warning("A API configurada esta temporariamente indisponivel. Aguarde alguns segundos e tente novamente.")
                 else:
                     st.error(f"Nao foi possivel autenticar agora. API respondeu com status {exc.response.status_code}.")
             except httpx.TimeoutException:
                 st.warning(
-                    "A API demorou para responder. Em ambiente free no Render isso pode acontecer ao acordar o servico. Aguarde alguns segundos e tente novamente."
+                    "A API configurada demorou para responder. Verifique a URL da instancia ativa e tente novamente em alguns segundos."
                 )
             except httpx.RequestError:
                 st.error(f"Nao foi possivel conectar na API configurada em {API_BASE}.")

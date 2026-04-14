@@ -12,6 +12,7 @@ from app.models.response import Response
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
 from app.services.analysis_service import analysis_service
+from app.services.export_service import export_service
 
 
 class SessionService:
@@ -167,6 +168,7 @@ class SessionService:
         if db_obj:
             await db.delete(db_obj)
             await db.commit()
+            export_service.delete_session_exports(id)
 
     async def archive(self, db: AsyncSession, id: int, actor: Optional[str] = None) -> Optional[Session]:
         db_obj = await self.get(db, id)
