@@ -59,9 +59,16 @@ O limite de aprofundamento controla quantas perguntas abertas a IA pode fazer ao
 
 1. O participante acessa o link publico da sessao
 2. Pode informar o nome ou seguir como anonimo
-3. Responde a nota principal
-4. A IA conduz perguntas de aprofundamento de acordo com o briefing
-5. O fluxo termina com a tela de agradecimento
+3. Precisa aceitar o uso das respostas para analise da sessao
+4. Responde a nota principal
+5. A IA conduz perguntas de aprofundamento de acordo com o briefing
+6. O fluxo termina com a tela de agradecimento
+
+Observacoes de privacidade:
+
+- se o nome nao for informado, a identificacao aparece como `Anonimo`
+- a organizacao pode configurar contato de privacidade no `.env`
+- a instancia agora oferece exportacao e anonimização de dados por participante
 
 ## 7. Operacao do detalhe da sessao
 
@@ -123,3 +130,18 @@ Se os provedores cloud falharem, o sistema tenta preservar a experiencia com o f
 - painel abrindo em `http://localhost:8501`
 - pelo menos uma sessao pronta para demo
 - analise e exportacoes validadas antes da reuniao
+
+## 13. Privacidade e retencao
+
+Variaveis recomendadas no `.env` para a operacao:
+
+- `RETENTION_RESPONSES_DAYS`
+- `RETENTION_ANALYSES_DAYS`
+- `RETENTION_LOGS_DAYS`
+- `RETENTION_EXPORTS_DAYS`
+- `PRIVACY_CONTACT_EMAIL`
+- `PRIVACY_LEGAL_BASIS_LABEL`
+
+Documento de referencia:
+
+- `PRIVACY_AND_RETENTION.md`

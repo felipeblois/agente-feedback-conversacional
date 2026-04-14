@@ -40,7 +40,7 @@ async def test_csv_and_pdf_exports_cover_happy_path(async_client: AsyncClient, m
     try:
         start_response = await async_client.post(
             f"/api/v1/public/{token}/start",
-            json={"anonymous": True},
+            json={"anonymous": True, "consent_accepted": True},
         )
         assert start_response.status_code == 200
         response_id = start_response.json()["response_id"]
@@ -130,7 +130,7 @@ async def test_pdf_export_keeps_only_two_latest_files_per_session(async_client: 
     try:
         start_response = await async_client.post(
             f"/api/v1/public/{token}/start",
-            json={"anonymous": True},
+            json={"anonymous": True, "consent_accepted": True},
         )
         assert start_response.status_code == 200
         response_id = start_response.json()["response_id"]

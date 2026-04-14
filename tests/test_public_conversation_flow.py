@@ -46,7 +46,10 @@ async def test_public_flow_completes_with_llm_path(async_client: AsyncClient, mo
     monkeypatch.setattr("app.services.conversation_service.call_llm", fake_call_llm)
 
     try:
-        start_response = await async_client.post(f"/api/v1/public/{token}/start", json={"anonymous": True})
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": True},
+        )
         assert start_response.status_code == 200
         start_payload = start_response.json()
         assert start_payload["first_question"]["type"] == "score"
@@ -95,7 +98,10 @@ async def test_public_flow_uses_fallback_when_llm_fails(async_client: AsyncClien
     monkeypatch.setattr("app.services.conversation_service.call_llm", fake_call_llm)
 
     try:
-        start_response = await async_client.post(f"/api/v1/public/{token}/start", json={"anonymous": True})
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": True},
+        )
         response_id = start_response.json()["response_id"]
 
         score_response = await async_client.post(
@@ -138,7 +144,10 @@ async def test_finish_endpoint_marks_response_as_completed(async_client: AsyncCl
     session_id = created["id"]
 
     try:
-        start_response = await async_client.post(f"/api/v1/public/{token}/start", json={"anonymous": True})
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": True},
+        )
         assert start_response.status_code == 200
         response_id = start_response.json()["response_id"]
 

@@ -22,6 +22,12 @@ async def get_session_by_token(public_token: str, db: AsyncSession) -> Session:
 @router.post("/{public_token}/start", response_model=StartResponse)
 async def start_response(public_token: str, data: ResponseStart, db: AsyncSession = Depends(get_db_session)):
     session = await get_session_by_token(public_token, db)
+
+    if not data.consent_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Consentimento obrigatorio para iniciar o feedback.",
+        )
     
     # Create participant if needed
     participant_name = data.participant_name.strip() if data.participant_name else None

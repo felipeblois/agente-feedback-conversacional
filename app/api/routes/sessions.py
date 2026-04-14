@@ -5,6 +5,11 @@ from typing import List
 from app.api.dependencies import get_db_session
 from app.core.observability import log_event
 from app.core.security import require_admin_api_key
+from app.schemas.privacy import (
+    ParticipantAnonymizeResponse,
+    ParticipantDataExportResponse,
+    SessionPrivacySummaryResponse,
+)
 from app.schemas.session import (
     DashboardSummaryResponse,
     SessionCreate,
@@ -78,6 +83,64 @@ async def get_session_detail(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.get("/{session_id}/privacy/summary", response_model=SessionPrivacySummaryResponse)
+async def get_session_privacy_summary(
+    session_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    _: str = Depends(require_admin_api_key),
+):
+    summary = await session_service.get_privacy_summary(db, session_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return summary
+
+
+@router.get(
+    "/{session_id}/participants/{participant_id}/export",
+    response_model=ParticipantDataExportResponse,
+)
+async def export_participant_data(
+    session_id: int,
+    participant_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    actor: str = Depends(require_admin_api_key),
+):
+    export_data = await session_service.export_participant_data(db, session_id, participant_id)
+    if not export_data:
+        raise HTTPException(status_code=404, detail="Participant not found for this session")
+    log_event(
+        "info",
+        "participant_data_exported",
+        session_id=session_id,
+        participant_id=participant_id,
+        actor=actor,
+    )
+    return export_data
+
+
+@router.delete(
+    "/{session_id}/participants/{participant_id}",
+    response_model=ParticipantAnonymizeResponse,
+)
+async def anonymize_participant_data(
+    session_id: int,
+    participant_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    actor: str = Depends(require_admin_api_key),
+):
+    result = await session_service.anonymize_participant(db, session_id, participant_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Participant not found for this session")
+    log_event(
+        "warning",
+        "participant_anonymized",
+        session_id=session_id,
+        participant_id=participant_id,
+        actor=actor,
+    )
+    return result
 
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(

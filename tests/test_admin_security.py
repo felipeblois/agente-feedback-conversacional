@@ -29,7 +29,7 @@ async def test_public_endpoints_remain_available_without_admin_auth(unauthentica
 
     create_response = await unauthenticated_async_client.post(
         "/api/v1/public/invalid-token/start",
-        json={"anonymous": True},
+        json={"anonymous": True, "consent_accepted": True},
     )
     assert create_response.status_code == 404
 

@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     admin_api_token: str = ""
     admin_session_ttl_minutes: int = 480
     settings_encryption_secret: str = ""
+    retention_responses_days: int = 365
+    retention_analyses_days: int = 365
+    retention_logs_days: int = 30
+    retention_exports_days: int = 30
+    privacy_contact_email: str = ""
+    privacy_legal_basis_label: str = "legitimo interesse e melhoria continua da experiencia"
+    privacy_ai_disclaimer: str = (
+        "As respostas podem ser processadas por provedores de IA configurados pela organizacao "
+        "para gerar perguntas e analises do feedback."
+    )
 
     default_llm_provider: str = "gemini"
     default_llm_model: str = "gemini-2.5-flash"

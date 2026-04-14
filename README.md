@@ -99,6 +99,11 @@ Variaveis recomendadas no `.env`:
 - `ADMIN_API_TOKEN` opcional
 - `INSTANCE_NAME`
 - `INSTANCE_ID`
+- `RETENTION_RESPONSES_DAYS`
+- `RETENTION_ANALYSES_DAYS`
+- `RETENTION_LOGS_DAYS`
+- `RETENTION_EXPORTS_DAYS`
+- `PRIVACY_CONTACT_EMAIL`
 
 Se `ADMIN_API_TOKEN` ficar vazio, a aplicacao gera internamente um token administrativo a partir da configuracao da instancia.
 
@@ -159,6 +164,13 @@ No painel Streamlit agora e possivel:
 - administrar usuarios nominais do painel
 - desativar, trocar senha e excluir admins nominais com auditoria minima
 
+### Privacidade e LGPD minima
+O produto agora inclui uma base minima de privacidade para operacao:
+- consentimento explicito antes de iniciar a conversa publica
+- exportacao de dados por participante
+- anonimização de participante preservando leitura agregada
+- politica operacional de retencao configuravel via `.env`
+
 ### Configurar credenciais da instancia
 Use a pagina `Configuracoes` no painel para definir se a instancia usa:
 - credenciais do cliente
@@ -214,6 +226,7 @@ Se os dois provedores cloud falharem, o sistema continua respondendo com a anali
 
 - `USER_MANUAL.md`: operacao do painel e do fluxo participante
 - `DEMO_PLAYBOOK.md`: roteiro curto para demos e pilotos assistidos
+- `PRIVACY_AND_RETENTION.md`: regras minimas de privacidade, retencao e LGPD operacional
 
 ## Stack
 

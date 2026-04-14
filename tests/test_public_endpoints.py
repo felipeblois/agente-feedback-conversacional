@@ -52,6 +52,7 @@ async def test_public_page_renders_for_active_session(async_client: AsyncClient)
         assert page_response.status_code == 200
         assert "text/html" in page_response.headers["content-type"]
         assert "Sessao publica" in page_response.text
+        assert "compartilhar minhas respostas" in page_response.text
     finally:
         await async_client.delete(f"/api/v1/sessions/{session_id}")
 
@@ -71,7 +72,10 @@ async def test_public_page_returns_404_for_archived_session(async_client: AsyncC
         page_response = await async_client.get(f"/f/{token}")
         assert page_response.status_code == 404
 
-        start_response = await async_client.post(f"/api/v1/public/{token}/start", json={"anonymous": True})
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": True},
+        )
         assert start_response.status_code == 404
     finally:
         await async_client.delete(f"/api/v1/sessions/{session_id}")
@@ -92,6 +96,7 @@ async def test_public_start_persists_named_participant(async_client: AsyncClient
                 "participant_name": "Felipe Teste",
                 "participant_email": "felipe@example.com",
                 "anonymous": False,
+                "consent_accepted": True,
             },
         )
         assert start_response.status_code == 200
@@ -109,5 +114,24 @@ async def test_public_start_persists_named_participant(async_client: AsyncClient
         response = response_result.scalar_one()
         assert response.participant_id == participant.id
         assert response.session_id == session_id
+    finally:
+        await async_client.delete(f"/api/v1/sessions/{session_id}")
+
+
+@pytest.mark.asyncio
+async def test_public_start_requires_consent(async_client: AsyncClient):
+    create_response = await async_client.post("/api/v1/sessions", json=build_session_payload("Sessao consentimento"))
+    assert create_response.status_code == 201
+    created = create_response.json()
+    session_id = created["id"]
+    token = created["public_token"]
+
+    try:
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": False},
+        )
+        assert start_response.status_code == 400
+        assert start_response.json()["detail"] == "Consentimento obrigatorio para iniciar o feedback."
     finally:
         await async_client.delete(f"/api/v1/sessions/{session_id}")
