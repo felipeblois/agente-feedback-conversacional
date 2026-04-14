@@ -68,6 +68,11 @@ provider_models = {
     "fallback": ["auto"],
 }
 
+saved_default_provider = config.get("default_provider", "gemini")
+saved_default_model = config.get("default_model", "gemini-2.5-flash")
+saved_fallback_provider = config.get("fallback_provider", "fallback")
+saved_fallback_model = config.get("fallback_model", "")
+
 col_form, col_test = st.columns([1.45, 1])
 
 with col_form:
@@ -77,25 +82,41 @@ with col_form:
         default_provider = st.selectbox(
             "Motor principal:",
             options=list(provider_options.keys()),
-            index=list(provider_options.keys()).index(config.get("default_provider", "gemini")),
+            index=list(provider_options.keys()).index(saved_default_provider),
             format_func=lambda key: provider_options[key],
+        )
+        default_model_options = provider_models[default_provider]
+        default_model_index = (
+            default_model_options.index(saved_default_model)
+            if default_provider == saved_default_provider and saved_default_model in default_model_options
+            else 0
         )
         default_model = st.selectbox(
             "Modelo principal",
-            options=provider_models[default_provider],
-            index=0,
+            options=default_model_options,
+            index=default_model_index,
         )
         fallback_provider = st.selectbox(
             "Motor de fallback:",
             options=list(provider_options.keys()),
-            index=list(provider_options.keys()).index(config.get("fallback_provider", "fallback")),
+            index=list(provider_options.keys()).index(saved_fallback_provider),
             format_func=lambda key: provider_options[key],
         )
-        fallback_model = st.selectbox(
-            "Modelo de fallback",
-            options=provider_models[fallback_provider],
-            index=0,
-        )
+        if fallback_provider == "fallback":
+            st.text_input("Modelo de fallback", value="", disabled=True, placeholder="")
+            fallback_model = ""
+        else:
+            fallback_model_options = provider_models[fallback_provider]
+            fallback_model_index = (
+                fallback_model_options.index(saved_fallback_model)
+                if fallback_provider == saved_fallback_provider and saved_fallback_model in fallback_model_options
+                else 0
+            )
+            fallback_model = st.selectbox(
+                "Modelo de fallback",
+                options=fallback_model_options,
+                index=fallback_model_index,
+            )
         gemini_api_key = st.text_input(
             "Gemini API Key",
             value="",
