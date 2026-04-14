@@ -71,6 +71,7 @@ class SessionService:
         completed_responses = await db.scalar(
             select(func.count(Response.id)).where(Response.status == "completed")
         ) or 0
+        average_score = await db.scalar(select(func.avg(Response.score)).where(Response.score.is_not(None)))
         analyses_completed = await db.scalar(select(func.count(AnalysisRun.id))) or 0
         active_sessions = await db.scalar(
             select(func.count(Session.id)).where(Session.status == "active")
@@ -79,17 +80,59 @@ class SessionService:
         average_completion_rate = (
             (completed_responses / total_responses) * 100 if total_responses else 0.0
         )
+        recent_sessions = await self.get_multi(db, skip=0, limit=5, status="active")
+        sessions_with_analysis = sum(1 for item in recent_sessions if item.get("analysis_count", 0) > 0)
+        completion_leader = (
+            max(recent_sessions, key=lambda item: item.get("completion_rate", 0.0))
+            if recent_sessions
+            else None
+        )
+        response_leader = (
+            max(recent_sessions, key=lambda item: item.get("response_count", 0))
+            if recent_sessions
+            else None
+        )
+        scored_sessions = [item for item in recent_sessions if item.get("avg_score") is not None]
+        score_leader = (
+            max(scored_sessions, key=lambda item: item.get("avg_score", 0.0))
+            if scored_sessions
+            else None
+        )
+        executive_highlights = [
+            f"{active_sessions} sessoes ativas em operacao." if active_sessions else "Nenhuma sessao ativa no momento.",
+            (
+                f"Maior volume recente: {response_leader['title']} com {response_leader['response_count']} respostas."
+                if response_leader
+                else "Sem volume recente suficiente para comparativo."
+            ),
+            (
+                f"Melhor taxa de conclusao: {completion_leader['title']} com {completion_leader['completion_rate']:.0f}%."
+                if completion_leader
+                else "Sem sessao com conclusao relevante ainda."
+            ),
+            (
+                f"Melhor score medio: {score_leader['title']} com {score_leader['avg_score']:.1f}."
+                if score_leader
+                else "Sem score medio consolidado para comparacao."
+            ),
+        ]
 
         return {
             "total_sessions": total_sessions,
             "total_responses": total_responses,
             "average_completion_rate": average_completion_rate,
+            "average_score": float(average_score) if average_score is not None else None,
             "analyses_completed": analyses_completed,
             "last_analysis_at": last_analysis_at,
             "active_sessions": active_sessions,
             "archived_sessions": archived_sessions,
             "completed_responses": completed_responses,
-            "recent_sessions": await self.get_multi(db, skip=0, limit=5, status="active"),
+            "sessions_with_analysis": sessions_with_analysis,
+            "completion_leader_title": completion_leader["title"] if completion_leader else None,
+            "response_leader_title": response_leader["title"] if response_leader else None,
+            "score_leader_title": score_leader["title"] if score_leader else None,
+            "executive_highlights": executive_highlights,
+            "recent_sessions": recent_sessions,
         }
 
     async def get_detail(self, db: AsyncSession, session_id: int) -> Optional[Dict[str, Any]]:

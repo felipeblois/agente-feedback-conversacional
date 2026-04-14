@@ -1,6 +1,6 @@
-# Manual de Utilizacao - Agente de Feedback Conversacional
+# Manual de Utilizacao - InsightFlow
 
-Este manual foi pensado para operacao local, demos assistidas e pilotos com cliente. O foco e ajudar o admin a instalar, subir a stack e conduzir o fluxo completo sem ruido.
+Este manual foi pensado para operacao local, demos assistidas e pilotos com cliente. O foco e ajudar o admin a instalar, subir a stack e conduzir o fluxo completo com narrativa clara e menos ruido operacional.
 
 ## 1. Portas e componentes
 
@@ -14,7 +14,7 @@ Antes da primeira execucao:
 
 1. Ajuste o `.env` com as credenciais da instancia
 2. Defina pelo menos `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `INSTANCE_NAME` e `INSTANCE_ID`
-3. Salve a chave Gemini e, se desejado, a chave Anthropic
+3. Salve a chave Gemini e, se desejado, as chaves OpenAI e Claude
 4. Rode `make setup`
 5. Rode `scripts/doctor.sh`
 
@@ -53,7 +53,7 @@ Na tela `Sessoes`, o admin pode:
 - informar tema principal, objetivo, publico e topicos
 - ajustar o limite de aprofundamento da IA
 
-O limite de aprofundamento controla quantas perguntas abertas a IA pode fazer ao participante.
+O limite de aprofundamento controla quantas perguntas abertas a IA pode fazer ao participante ao longo da conversa.
 
 ## 6. Fluxo do participante
 
@@ -68,13 +68,14 @@ Observacoes de privacidade:
 
 - se o nome nao for informado, a identificacao aparece como `Anonimo`
 - a organizacao pode configurar contato de privacidade no `.env`
-- a instancia agora oferece exportacao e anonimização de dados por participante
+- a instancia oferece exportacao e anonimizaçao de dados por participante
 
 ## 7. Operacao do detalhe da sessao
 
 Na tela `Detalhe da sessao`, o admin consegue:
 
 - acompanhar respostas e taxa de conclusao
+- acompanhar leitura comparativa no portfolio
 - ver distribuicao de notas
 - revisar respostas recentes
 - gerar analise com IA
@@ -107,11 +108,12 @@ Protecoes importantes:
 
 ## 10. Motores de analise
 
-O runtime atual segue esta ordem:
+O runtime atual pode operar com:
 
 1. Gemini
-2. Anthropic
-3. Jarvis como fallback estatico
+2. OpenAI
+3. Claude
+4. Jarvis como fallback estatico
 
 Se os provedores cloud falharem, o sistema tenta preservar a experiencia com o fallback local.
 
@@ -121,7 +123,7 @@ Se os provedores cloud falharem, o sistema tenta preservar a experiencia com o f
 2. Mostre a criacao de uma sessao com briefing estruturado
 3. Abra o link publico e simule uma resposta
 4. Volte ao detalhe e gere a analise
-5. Encerre mostrando resumo executivo, temas e exportacoes
+5. Encerre mostrando resumo executivo, comparativos e exportacoes
 
 ## 12. Checklist de estabilidade antes de apresentar
 

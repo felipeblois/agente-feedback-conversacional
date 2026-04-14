@@ -64,11 +64,17 @@ class DashboardSummaryResponse(BaseModel):
     total_sessions: int
     total_responses: int
     average_completion_rate: float
+    average_score: Optional[float] = None
     analyses_completed: int
     last_analysis_at: Optional[datetime] = None
     active_sessions: int
     archived_sessions: int
     completed_responses: int
+    sessions_with_analysis: int
+    completion_leader_title: Optional[str] = None
+    response_leader_title: Optional[str] = None
+    score_leader_title: Optional[str] = None
+    executive_highlights: List[str] = []
     recent_sessions: List[SessionListResponse]
 
 

@@ -83,3 +83,8 @@ class SettingsSecurityMetaResponse(BaseModel):
 
 class SettingsAuditListResponse(BaseModel):
     items: List[SettingsAuditLogResponse]
+
+
+class SettingsAuditSummaryResponse(BaseModel):
+    items: List[SettingsAuditLogResponse]
+    total_items: int

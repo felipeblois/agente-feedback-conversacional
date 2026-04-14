@@ -25,6 +25,7 @@ from app.schemas.admin import (
 )
 from app.schemas.settings import (
     SettingsAuditListResponse,
+    SettingsAuditSummaryResponse,
     SettingsSecurityMetaResponse,
     AISettingsResponse,
     AISettingsTestRequest,
@@ -109,9 +110,9 @@ async def get_ai_settings(
 async def update_ai_settings(
     payload: AISettingsUpdate,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
-    return await settings_service.update(db, payload, actor="streamlit_admin")
+    return await settings_service.update(db, payload, actor=actor)
 
 
 @router.post("/ai/test", response_model=AISettingsTestResponse)
@@ -142,6 +143,17 @@ async def get_ai_settings_audit(
     _: str = Depends(require_admin_api_key),
 ):
     return await settings_service.list_audit_logs(db)
+
+
+@router.get("/audit", response_model=SettingsAuditSummaryResponse)
+async def get_operational_audit(
+    limit: int = 40,
+    area: str = "",
+    db: AsyncSession = Depends(get_db_session),
+    _: str = Depends(require_admin_api_key),
+):
+    selected_area = area.strip() or None
+    return await settings_service.list_operational_audit_logs(db, limit=limit, area=selected_area)
 
 
 @router.get("/admin/meta", response_model=SettingsSecurityMetaResponse)

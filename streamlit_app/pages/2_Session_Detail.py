@@ -120,6 +120,16 @@ try:
 except Exception:
     analysis = None
 
+try:
+    dashboard_summary = api_get("/sessions/dashboard/summary")
+except Exception:
+    dashboard_summary = {}
+
+try:
+    operational_audit = api_get("/settings/audit")
+except Exception:
+    operational_audit = {"items": []}
+
 confirm_delete_key = f"confirm_delete_{selected_id}"
 confirm_archive_key = f"confirm_archive_{selected_id}"
 analysis_run_key = f"analysis_run_{selected_id}"
@@ -246,6 +256,21 @@ overview_tab, briefing_tab, edit_tab, export_tab = st.tabs(
 
 with overview_tab:
     main_col, side_col = st.columns([1.5, 1])
+    recent_sessions = dashboard_summary.get("recent_sessions", [])
+    portfolio_sessions = [item for item in recent_sessions if item.get("id") != selected_id]
+    volume_rank = 1 + sum(1 for item in portfolio_sessions if item.get("response_count", 0) > detail["response_count"])
+    score_rank = None
+    if detail.get("avg_score") is not None:
+        score_rank = 1 + sum(
+            1
+            for item in portfolio_sessions
+            if item.get("avg_score") is not None and item.get("avg_score", 0) > detail.get("avg_score", 0)
+        )
+    session_audit_items = [
+        item
+        for item in operational_audit.get("items", [])
+        if f"session_id={selected_id}" in (item.get("details") or "")
+    ][:6]
 
     with main_col:
         render_session_card(
@@ -345,6 +370,33 @@ with overview_tab:
             compact=True,
         )
 
+        st.markdown("### Leitura comparativa")
+        render_stat_band(
+            [
+                {
+                    "label": "Rank em volume",
+                    "value": f"#{volume_rank}",
+                    "copy": "Posicao desta sessao no recorte mais recente.",
+                },
+                {
+                    "label": "Rank em score",
+                    "value": f"#{score_rank}" if score_rank is not None else "-",
+                    "copy": "Comparativo do score medio atual.",
+                },
+                {
+                    "label": "Media do portfolio",
+                    "value": format_score(dashboard_summary.get("average_score")),
+                    "copy": "Media das sessoes com analise concluida.",
+                },
+                {
+                    "label": "Ativas no portfolio",
+                    "value": str(dashboard_summary.get("active_sessions", 0)),
+                    "copy": "Base ativa monitorada neste momento.",
+                },
+            ],
+            compact=True,
+        )
+
         st.markdown("### Insights")
         if analysis:
             render_insight_card(
@@ -365,6 +417,19 @@ with overview_tab:
             empty_state(
                 "Analise ainda nao gerada",
                 "Use o botao de analise para produzir o resumo executivo e os temas principais desta sessao.",
+            )
+
+        st.markdown("### Auditoria da sessao")
+        if session_audit_items:
+            for item in session_audit_items:
+                render_insight_card(
+                    f"{item.get('area', '-')} | {item.get('action', '-')}",
+                    f"{format_dt(item.get('created_at'))} | {item.get('actor', '-')} | {item.get('details') or 'Sem detalhe adicional.'}",
+                )
+        else:
+            empty_state(
+                "Sem eventos rastreados",
+                "As proximas alteracoes, analises e exportacoes desta sessao aparecerao aqui.",
             )
 
 with briefing_tab:

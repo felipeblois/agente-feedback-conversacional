@@ -27,9 +27,9 @@ ensure_admin_access()
 render_sidebar("dashboard")
 
 panel_header(
-    "Demo cockpit",
-    "Agente de Feedback Conversacional",
-    "Apresente valor rapidamente, acompanhe a operacao e mostre insights com leitura executiva.",
+    "InsightFlow",
+    "Painel executivo de feedback conversacional",
+    "Acompanhe operacao, leitura executiva e comparativos entre sessoes com narrativa pronta para demo e piloto.",
 )
 
 top_head, top_action = st.columns([5, 1.2])
@@ -86,9 +86,9 @@ with kpi_cols[2]:
 with kpi_cols[3]:
     render_kpi_card(
         "ARC",
-        "Arquivadas",
-        str(summary["archived_sessions"]),
-        format_dt(summary.get("last_analysis_at")) if summary.get("last_analysis_at") else "Sem analise recente",
+        "Score portfolio",
+        format_score(summary.get("average_score")),
+        f"{summary['sessions_with_analysis']} sessoes com analise",
         "purple",
     )
 
@@ -125,19 +125,21 @@ with left:
     st.markdown("### Resumo executivo")
     info_list(
         [
-            ("Operacao atual", f"{summary['active_sessions']} sessoes ativas e {summary['total_responses']} respostas acumuladas"),
-            ("Sessao com mais tracao", f"{top_session['title']} com {top_session['response_count']} respostas"),
-            ("Melhor taxa de termino", f"{best_completion['title']} com {format_pct(best_completion['completion_rate'])}"),
+            ("Operacao atual", f"{summary['active_sessions']} sessoes ativas, {summary['total_responses']} respostas e {summary['analyses_completed']} analises acumuladas"),
+            ("Lider em volume", summary.get("response_leader_title") or top_session["title"]),
+            ("Lider em conclusao", summary.get("completion_leader_title") or best_completion["title"]),
+            ("Melhor score medio", summary.get("score_leader_title") or "Ainda sem sessao lider em score"),
             ("Historico preservado", f"{summary['archived_sessions']} sessoes arquivadas para consulta futura"),
-            ("Ultimo insight", f"Analise mais recente em {format_dt(summary.get('last_analysis_at'))}"),
         ]
     )
+    st.markdown("### Highlights gerenciais")
+    info_list([(f"{index + 1}. Insight", item) for index, item in enumerate(summary.get("executive_highlights", []))])
     st.markdown("### Narrativa de demo")
     info_list(
         [
-            ("1. Crie a sessao", "Monte o briefing estruturado com tema, publico e objetivo."),
-            ("2. Compartilhe o link", "Abra o fluxo publico e colete respostas em poucos minutos."),
-            ("3. Gere a analise", "Mostre o resumo executivo, temas e recomendacoes no detalhe."),
+            ("1. Estruture a sessao", "Monte o briefing com tema, publico e objetivo de negocio."),
+            ("2. Colete feedback com IA", "Compartilhe o link e mostre a conversa guiada pelo contexto."),
+            ("3. Leia e compare", "Use o detalhe e o dashboard para mostrar insight e comparativo gerencial."),
         ]
     )
 
@@ -145,8 +147,8 @@ with right:
     st.markdown("### Atalhos rapidos")
     render_quick_tiles(
         [
-            {"icon": "+", "title": "Nova Sessao", "copy": "Abra uma coleta e gere um novo link publico para a demo."},
-            {"icon": "[]", "title": "Abrir Detalhe", "copy": "Continue a apresentacao a partir da sessao mais recente."},
+            {"icon": "+", "title": "Nova sessao", "copy": "Abra uma nova rodada de feedback com briefing estruturado."},
+            {"icon": "[]", "title": "Abrir painel da sessao", "copy": "Continue a leitura executiva a partir da sessao mais recente."},
         ]
     )
     if st.button("Criar nova sessao", use_container_width=True):
@@ -161,9 +163,9 @@ with right:
     st.markdown("### Pronto para piloto")
     info_list(
         [
-            ("Backend publico", PUBLIC_BASE_URL),
+            ("Entrada publica", PUBLIC_BASE_URL),
             ("Painel admin", ADMIN_BASE_URL),
-            ("Banco de dados", "SQLite local ou Postgres cloud"),
-            ("Modo operacional", "Configuravel para WSL ou cloud"),
+            ("Base de dados", "SQLite local ou Postgres cloud"),
+            ("Modo operacional", "WSL, EC2 ou cloud low-cost"),
         ]
     )

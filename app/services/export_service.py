@@ -1,3 +1,5 @@
+from sqlalchemy import select
+from sqlalchemy import func
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -6,12 +8,12 @@ import pandas as pd
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.models.response import Response
 from app.models.message import Message
 from app.models.session import Session
 from app.services.analysis_service import analysis_service
+
 
 class ExportService:
     def __init__(self) -> None:
@@ -50,11 +52,12 @@ class ExportService:
         analysis = await analysis_service.get_latest(db, session_id)
         if not analysis:
             return None
+        comparative = await self._build_comparative_context(db, session_id)
             
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("helvetica", "B", 16)
-        pdf.cell(0, 10, f"Feedback Report: {session.title}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        pdf.cell(0, 10, f"InsightFlow Executive Report: {session.title}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
         
         pdf.set_font("helvetica", size=12)
         pdf.ln(10)
@@ -72,20 +75,92 @@ class ExportService:
         pdf.set_font("helvetica", "B", 14)
         pdf.cell(0, 10, "Resumo Executivo", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", size=12)
-        pdf.multi_cell(0, 10, analysis["summary"])
+        pdf.multi_cell(0, 10, analysis["summary"], new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+        pdf.ln(4)
+        pdf.set_font("helvetica", "B", 14)
+        pdf.cell(0, 10, "Leitura Gerencial", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("helvetica", size=12)
+        pdf.multi_cell(
+            0,
+            10,
+            (
+                f"Sessoes ativas comparadas: {comparative['active_sessions']} | "
+                f"Score medio da instancia: {comparative['portfolio_average_score']} | "
+                f"Taxa media de conclusao: {comparative['portfolio_completion_rate']}."
+            ),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.multi_cell(
+            0,
+            10,
+            (
+                f"Posicao desta sessao no volume: {comparative['response_rank_label']}. "
+                f"Posicao em score medio: {comparative['score_rank_label']}."
+            ),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
         
         pdf.ln(5)
         pdf.set_font("helvetica", "B", 14)
         pdf.cell(0, 10, "Principais Temas Mencionados", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("helvetica", size=12)
         themes = ", ".join(analysis["top_positive_themes"])
-        pdf.multi_cell(0, 10, f"Temas Frequentes: {themes if themes else 'Nenhum'}")
+        pdf.multi_cell(
+            0,
+            10,
+            f"Temas Frequentes: {themes if themes else 'Nenhum'}",
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
         
         self.export_dir.mkdir(parents=True, exist_ok=True)
         filepath = self.export_dir / f"session_{session_id}_report_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.pdf"
         pdf.output(str(filepath))
         self._cleanup_old_reports(session_id)
         return str(filepath)
+
+    async def _build_comparative_context(self, db: AsyncSession, session_id: int) -> dict:
+        active_sessions = await db.scalar(select(func.count(Session.id)).where(Session.status == "active")) or 0
+        portfolio_average_score = await db.scalar(
+            select(func.avg(Response.score)).where(Response.score.is_not(None))
+        )
+        total_responses = await db.scalar(select(func.count(Response.id))) or 0
+        completed_responses = await db.scalar(
+            select(func.count(Response.id)).where(Response.status == "completed")
+        ) or 0
+        portfolio_completion_rate = (
+            f"{(completed_responses / total_responses * 100):.0f}%"
+            if total_responses
+            else "-"
+        )
+
+        response_counts_stmt = (
+            select(Response.session_id, func.count(Response.id).label("response_count"), func.avg(Response.score).label("avg_score"))
+            .group_by(Response.session_id)
+        )
+        response_rows = await db.execute(response_counts_stmt)
+        rows = list(response_rows.all())
+
+        sorted_by_volume = sorted(rows, key=lambda item: item.response_count or 0, reverse=True)
+        sorted_by_score = sorted(
+            [item for item in rows if item.avg_score is not None],
+            key=lambda item: float(item.avg_score),
+            reverse=True,
+        )
+
+        response_rank = next((index + 1 for index, item in enumerate(sorted_by_volume) if item.session_id == session_id), None)
+        score_rank = next((index + 1 for index, item in enumerate(sorted_by_score) if item.session_id == session_id), None)
+
+        return {
+            "active_sessions": active_sessions,
+            "portfolio_average_score": f"{float(portfolio_average_score):.1f}" if portfolio_average_score is not None else "-",
+            "portfolio_completion_rate": portfolio_completion_rate,
+            "response_rank_label": f"{response_rank}o lugar" if response_rank else "sem ranking",
+            "score_rank_label": f"{score_rank}o lugar" if score_rank else "sem ranking",
+        }
 
     def delete_session_exports(self, session_id: int) -> int:
         removed = 0

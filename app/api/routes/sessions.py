@@ -19,6 +19,7 @@ from app.schemas.session import (
     SessionUpdate,
 )
 from app.services.session_service import session_service
+from app.services.settings_service import settings_service
 
 router = APIRouter()
 
@@ -29,6 +30,14 @@ async def create_session(
     actor: str = Depends(require_admin_api_key),
 ):
     session = await session_service.create(db, session_in, actor=actor)
+    await settings_service.append_audit_log(
+        db,
+        area="sessions",
+        action="create",
+        actor=actor,
+        details=f"session_id={session.id} | title={session.title}",
+    )
+    await db.commit()
     log_event("info", "session_created", session_id=session.id, title=session.title, score_type=session.score_type, actor=actor)
     return session
 
@@ -58,6 +67,14 @@ async def archive_session(
     session = await session_service.archive(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await settings_service.append_audit_log(
+        db,
+        area="sessions",
+        action="archive",
+        actor=actor,
+        details=f"session_id={session_id} | status={session.status}",
+    )
+    await db.commit()
     log_event("info", "session_archived", session_id=session_id, status=session.status, actor=actor)
     return session
 
@@ -70,6 +87,14 @@ async def reactivate_session(
     session = await session_service.reactivate(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await settings_service.append_audit_log(
+        db,
+        area="sessions",
+        action="reactivate",
+        actor=actor,
+        details=f"session_id={session_id} | status={session.status}",
+    )
+    await db.commit()
     log_event("info", "session_reactivated", session_id=session_id, status=session.status, actor=actor)
     return session
 
@@ -83,6 +108,14 @@ async def revoke_public_link(
     session = await session_service.revoke_public_link(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await settings_service.append_audit_log(
+        db,
+        area="public_links",
+        action="revoke",
+        actor=actor,
+        details=f"session_id={session_id}",
+    )
+    await db.commit()
     log_event("warning", "public_link_revoked", session_id=session_id, actor=actor)
     return session
 
@@ -96,6 +129,14 @@ async def reactivate_public_link(
     session = await session_service.reactivate_public_link(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await settings_service.append_audit_log(
+        db,
+        area="public_links",
+        action="reactivate",
+        actor=actor,
+        details=f"session_id={session_id}",
+    )
+    await db.commit()
     log_event("info", "public_link_reactivated", session_id=session_id, actor=actor)
     return session
 
@@ -109,6 +150,14 @@ async def rotate_public_link(
     session = await session_service.rotate_public_token(db, id=session_id, actor=actor)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await settings_service.append_audit_log(
+        db,
+        area="public_links",
+        action="rotate",
+        actor=actor,
+        details=f"session_id={session_id}",
+    )
+    await db.commit()
     log_event("warning", "public_link_rotated", session_id=session_id, actor=actor)
     return session
 
@@ -203,6 +252,14 @@ async def update_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     updated = await session_service.update(db, db_obj=session, obj_in=session_in, actor=actor)
+    await settings_service.append_audit_log(
+        db,
+        area="sessions",
+        action="update",
+        actor=actor,
+        details=f"session_id={session_id} | title={updated.title}",
+    )
+    await db.commit()
     log_event("info", "session_updated", session_id=session_id, title=updated.title, score_type=updated.score_type, actor=actor)
     return updated
 
@@ -215,6 +272,15 @@ async def delete_session(
     session = await session_service.get(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    title = session.title
     await session_service.remove(db, id=session_id)
+    await settings_service.append_audit_log(
+        db,
+        area="sessions",
+        action="delete",
+        actor=actor,
+        details=f"session_id={session_id} | title={title}",
+    )
+    await db.commit()
     log_event("warning", "session_deleted", session_id=session_id, actor=actor)
     return {"status": "deleted"}

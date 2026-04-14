@@ -42,14 +42,15 @@ render_sidebar("settings")
 
 panel_header(
     "Configuracoes",
-    "Credenciais de IA e admins",
-    "Gerencie seguranca, credenciais da instancia e usuarios administrativos nominais.",
+    "Governanca da instancia InsightFlow",
+    "Gerencie seguranca, credenciais, admins nominais e rastreabilidade operacional.",
 )
 
 try:
     config = api_get("/settings/ai")
     security_meta = api_get("/settings/admin/meta")
     audit_logs = api_get("/settings/ai/audit")
+    operational_audit = api_get("/settings/audit")
     admin_users = api_get("/settings/admin/users")
 except Exception as exc:
     render_friendly_error(exc)
@@ -231,6 +232,16 @@ with col_test:
             st.markdown(f"- `{format_dt(item['created_at'])}` | `{item['actor']}` | `{item['details']}`")
     else:
         st.caption("Nenhuma alteracao auditada ainda.")
+
+    st.markdown("### Atividade operacional")
+    if operational_audit.get("items"):
+        for item in operational_audit["items"][:10]:
+            st.markdown(
+                f"- `{format_dt(item['created_at'])}` | `{item['area']}` | `{item['action']}` | `{item['actor']}`"
+            )
+            st.caption(item["details"])
+    else:
+        st.caption("Nenhuma atividade operacional registrada ainda.")
 
 st.markdown("### Usuarios admin")
 admin_col, list_col = st.columns([1.05, 1.55])

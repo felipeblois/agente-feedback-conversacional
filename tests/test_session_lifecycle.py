@@ -55,3 +55,10 @@ async def test_session_can_be_created_updated_archived_reactivated_and_deleted(a
 
     delete_response = await async_client.delete(f"/api/v1/sessions/{session_id}")
     assert delete_response.status_code == 200
+
+    audit_response = await async_client.get("/api/v1/settings/audit")
+    assert audit_response.status_code == 200
+    items = audit_response.json()["items"]
+    session_audits = [item for item in items if f"session_id={session_id}" in item["details"]]
+    actions = {item["action"] for item in session_audits}
+    assert {"create", "update", "archive", "reactivate", "delete"}.issubset(actions)

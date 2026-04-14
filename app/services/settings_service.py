@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -202,6 +202,34 @@ class SettingsService:
                 }
                 for item in items
             ]
+        }
+
+    async def list_operational_audit_logs(
+        self,
+        db: AsyncSession,
+        limit: int = 40,
+        area: Optional[str] = None,
+    ) -> Dict:
+        stmt = select(SettingsAuditLog)
+        if area:
+            stmt = stmt.where(SettingsAuditLog.area == area)
+        stmt = stmt.order_by(desc(SettingsAuditLog.created_at)).limit(limit)
+        result = await db.execute(stmt)
+        items = list(result.scalars().all())
+        return {
+            "items": [
+                {
+                    "id": item.id,
+                    "area": item.area,
+                    "action": item.action,
+                    "actor": item.actor,
+                    "instance_id": item.instance_id,
+                    "details": item.details,
+                    "created_at": item.created_at,
+                }
+                for item in items
+            ],
+            "total_items": len(items),
         }
 
     def get_security_meta(self) -> Dict:

@@ -265,5 +265,39 @@ async def test_rotate_public_link_invalidates_previous_token(async_client: Async
 
         new_page_response = await async_client.get(f"/f/{new_token}")
         assert new_page_response.status_code == 200
+
+        audit_response = await async_client.get("/api/v1/settings/audit")
+        assert audit_response.status_code == 200
+        audit_items = audit_response.json()["items"]
+        assert any(
+            item["area"] == "public_links"
+            and item["action"] == "rotate"
+            and f"session_id={session_id}" in item["details"]
+            for item in audit_items
+        )
+    finally:
+        await async_client.delete(f"/api/v1/sessions/{session_id}")
+
+
+@pytest.mark.asyncio
+async def test_public_link_revoke_is_audited(async_client: AsyncClient):
+    create_response = await async_client.post("/api/v1/sessions", json=build_session_payload("Sessao auditada"))
+    assert create_response.status_code == 201
+    created = create_response.json()
+    session_id = created["id"]
+
+    try:
+        revoke_response = await async_client.post(f"/api/v1/sessions/{session_id}/public-link/revoke")
+        assert revoke_response.status_code == 200
+
+        audit_response = await async_client.get("/api/v1/settings/audit")
+        assert audit_response.status_code == 200
+        audit_items = audit_response.json()["items"]
+        assert any(
+            item["area"] == "public_links"
+            and item["action"] == "revoke"
+            and f"session_id={session_id}" in item["details"]
+            for item in audit_items
+        )
     finally:
         await async_client.delete(f"/api/v1/sessions/{session_id}")

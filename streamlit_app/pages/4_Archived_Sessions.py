@@ -38,9 +38,9 @@ ensure_admin_access()
 render_sidebar("archived")
 
 panel_header(
-    "Arquivo",
-    "Sessoes arquivadas",
-    "Consulte o historico da operacao, revise insights gerados e reative uma sessao quando precisar.",
+    "InsightFlow",
+    "Historico arquivado",
+    "Consulte o historico operacional, revise insights gerados e reative uma sessao quando precisar.",
 )
 
 try:

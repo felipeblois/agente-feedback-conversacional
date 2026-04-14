@@ -52,9 +52,9 @@ ensure_admin_access()
 render_sidebar("sessions")
 
 panel_header(
-    "Workspace",
-    "Sessoes de feedback",
-    "Crie, filtre, ajuste o briefing e acompanhe a operacao sem sair do painel.",
+    "InsightFlow",
+    "Rodadas de feedback",
+    "Crie, filtre, ajuste o briefing e acompanhe a operacao executiva sem sair do painel.",
 )
 
 try:
@@ -123,7 +123,7 @@ render_stat_band(
 list_col, form_col = st.columns([1.55, 1])
 
 with list_col:
-    st.markdown("### Lista operacional")
+    st.markdown("### Carteira ativa")
     if not sessions:
         empty_state(
             "Nenhuma sessao cadastrada",
@@ -193,8 +193,8 @@ with list_col:
                         st.error(str(exc))
 
 with form_col:
-    st.markdown("### Criar sessao")
-    st.caption("Crie uma nova coleta com briefing estruturado para a IA.")
+    st.markdown("### Nova rodada")
+    st.caption("Abra uma nova rodada de feedback com briefing estruturado para a IA.")
     with st.form("new_session_form", clear_on_submit=True):
         title = st.text_input("Titulo")
         desc = st.text_area("Descricao")

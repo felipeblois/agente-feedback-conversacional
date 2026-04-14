@@ -36,17 +36,18 @@ async def test_public_endpoints_remain_available_without_admin_auth(unauthentica
 
 @pytest.mark.asyncio
 async def test_settings_update_creates_audit_log(async_client: AsyncClient):
+    marker = uuid4().hex[:8]
     update_response = await async_client.put(
         "/api/v1/settings/ai",
         json={
             "credential_mode": "platform",
-            "customer_name": "Cliente teste",
+            "customer_name": f"Cliente teste {marker}",
             "default_provider": "gemini",
             "default_model": "gemini-2.5-flash",
             "fallback_provider": "anthropic",
             "fallback_model": "claude-3-5-haiku-20241022",
             "enable_platform_fallback": True,
-            "notes": "Ajuste auditado pela suite",
+            "notes": f"Ajuste auditado pela suite {marker}",
             "clear_gemini_api_key": False,
             "clear_anthropic_api_key": False,
         },
@@ -57,7 +58,13 @@ async def test_settings_update_creates_audit_log(async_client: AsyncClient):
     assert audit_response.status_code == 200
     payload = audit_response.json()
     assert payload["items"]
-    assert any("customer_name" in item["details"] or "notes" in item["details"] for item in payload["items"])
+    matching_item = next(
+        item
+        for item in payload["items"]
+        if item["area"] == "ai_settings" and item["action"] == "update"
+    )
+    assert matching_item["actor"] == "admin"
+    assert "mode=" in matching_item["details"]
 
 
 @pytest.mark.asyncio
@@ -154,6 +161,28 @@ async def test_expired_admin_session_is_rejected(
     response = await unauthenticated_async_client.get(
         "/api/v1/settings/admin/session",
         headers={"X-Admin-Token": expired_token},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_removed_admin_session_is_rejected_after_restart_like_cleanup(
+    unauthenticated_async_client: AsyncClient,
+    db_session,
+):
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": "admin", "password": "admin"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    await db_session.execute(delete(AdminSession))
+    await db_session.commit()
+
+    response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": token},
     )
     assert response.status_code == 401
 
