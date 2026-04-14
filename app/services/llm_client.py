@@ -18,6 +18,12 @@ litellm.set_verbose = False
 
 SUPPORTED_PROVIDERS = {"gemini", "anthropic", "openai"}
 
+DEFAULT_PROVIDER_MODELS = {
+    "gemini": "gemini-2.5-flash",
+    "anthropic": "claude-3-5-haiku-20241022",
+    "openai": "gpt-4.1-mini",
+}
+
 
 def _resolve_model(provider: str, model: str) -> str:
     if provider == "gemini":
@@ -29,6 +35,14 @@ def _resolve_model(provider: str, model: str) -> str:
     return model
 
 
+def _pick_model_for_provider(provider: str, runtime_config: Dict[str, str]) -> str:
+    if provider == runtime_config.get("default_provider") and runtime_config.get("default_model"):
+        return runtime_config["default_model"]
+    if provider == runtime_config.get("fallback_provider") and runtime_config.get("fallback_model"):
+        return runtime_config["fallback_model"]
+    return DEFAULT_PROVIDER_MODELS.get(provider, runtime_config.get("default_model", ""))
+
+
 def _set_provider_env(runtime_config: Dict[str, str]) -> None:
     if runtime_config.get("gemini_api_key"):
         os.environ["GEMINI_API_KEY"] = runtime_config["gemini_api_key"]
@@ -38,8 +52,10 @@ def _set_provider_env(runtime_config: Dict[str, str]) -> None:
         os.environ["ANTHROPIC_API_KEY"] = runtime_config["anthropic_api_key"]
     elif "ANTHROPIC_API_KEY" in os.environ:
         os.environ.pop("ANTHROPIC_API_KEY", None)
-    if settings.openai_api_key:
-        os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+    if runtime_config.get("openai_api_key"):
+        os.environ["OPENAI_API_KEY"] = runtime_config["openai_api_key"]
+    elif "OPENAI_API_KEY" in os.environ:
+        os.environ.pop("OPENAI_API_KEY", None)
 
 
 def _provider_ready(provider: str, runtime_config: Dict[str, str]) -> Tuple[bool, str]:
@@ -49,7 +65,7 @@ def _provider_ready(provider: str, runtime_config: Dict[str, str]) -> Tuple[bool
         return False, "provider_not_configured"
     if provider == "anthropic" and not runtime_config.get("anthropic_api_key"):
         return False, "provider_not_configured"
-    if provider == "openai" and not settings.openai_api_key:
+    if provider == "openai" and not runtime_config.get("openai_api_key"):
         return False, "provider_not_configured"
     return True, "ready"
 
@@ -197,7 +213,13 @@ async def call_llm(
     ]
 
     if provider_override:
-        providers = [(provider_override, model_override or runtime_config["default_model"], "selected")]
+        providers = [
+            (
+                provider_override,
+                model_override or _pick_model_for_provider(provider_override, runtime_config),
+                "selected",
+            )
+        ]
 
     for index, (provider, model, stage) in enumerate(providers):
         if not provider or not model:
@@ -241,6 +263,8 @@ async def test_provider_connection(
         selected_model = model or runtime_config["default_model"]
     elif provider == "anthropic":
         selected_model = model or runtime_config["fallback_model"]
+    elif provider == "openai":
+        selected_model = model or "gpt-4.1-mini"
     else:
         selected_model = model or "n/a"
 

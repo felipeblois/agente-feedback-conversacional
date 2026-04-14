@@ -18,8 +18,10 @@ async def test_ai_settings_response_masks_customer_keys(async_client, db_session
             "enable_platform_fallback": False,
             "notes": "teste de mascaramento",
             "gemini_api_key": "gemini-secret-123456",
+            "openai_api_key": "openai-secret-112233",
             "anthropic_api_key": "anthropic-secret-654321",
             "clear_gemini_api_key": False,
+            "clear_openai_api_key": False,
             "clear_anthropic_api_key": False,
         },
     )
@@ -27,11 +29,14 @@ async def test_ai_settings_response_masks_customer_keys(async_client, db_session
     payload = update_response.json()
 
     assert payload["gemini_key_masked"].startswith("gemi")
+    assert payload["openai_key_masked"].startswith("open")
     assert payload["anthropic_key_masked"].startswith("anth")
     assert "secret" not in str(payload).lower()
     assert payload["customer_gemini_key_configured"] is True
+    assert payload["customer_openai_key_configured"] is True
     assert payload["customer_anthropic_key_configured"] is True
     assert payload["effective_gemini_credential_source"] == "customer"
+    assert payload["effective_openai_credential_source"] == "customer"
     assert payload["effective_anthropic_credential_source"] == "customer"
 
 
@@ -49,16 +54,20 @@ async def test_runtime_config_respects_customer_only_mode_without_platform_fallb
             enable_platform_fallback=False,
             notes="",
             gemini_api_key=None,
+            openai_api_key=None,
             anthropic_api_key=None,
             clear_gemini_api_key=True,
+            clear_openai_api_key=True,
             clear_anthropic_api_key=True,
         ),
         actor="test",
     )
     runtime_config = await settings_service.get_runtime_config(db_session)
     assert runtime_config["gemini_api_key"] == ""
+    assert runtime_config["openai_api_key"] == ""
     assert runtime_config["anthropic_api_key"] == ""
     assert runtime_config["gemini_credential_source"] == "missing"
+    assert runtime_config["openai_credential_source"] == "missing"
     assert runtime_config["anthropic_credential_source"] == "missing"
 
 
@@ -76,12 +85,15 @@ async def test_runtime_config_uses_platform_fallback_when_enabled(db_session):
             enable_platform_fallback=True,
             notes="",
             gemini_api_key=None,
+            openai_api_key=None,
             anthropic_api_key=None,
             clear_gemini_api_key=True,
+            clear_openai_api_key=True,
             clear_anthropic_api_key=True,
         ),
         actor="test",
     )
     runtime_config = await settings_service.get_runtime_config(db_session)
     assert runtime_config["gemini_credential_source"] in {"platform_fallback", "missing", "platform"}
+    assert runtime_config["openai_credential_source"] in {"platform_fallback", "missing", "platform"}
     assert runtime_config["anthropic_credential_source"] in {"platform_fallback", "missing", "platform"}

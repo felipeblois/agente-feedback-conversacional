@@ -7,4 +7,5 @@ ensure_linux
 ensure_project_root
 ensure_venv
 
+run_python_module alembic upgrade head
 run_python_module pytest tests/ -v

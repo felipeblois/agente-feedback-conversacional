@@ -18,8 +18,10 @@ class AISettingsBase(BaseModel):
 class AISettingsUpdate(AISettingsBase):
     gemini_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
     clear_gemini_api_key: bool = False
     clear_anthropic_api_key: bool = False
+    clear_openai_api_key: bool = False
 
 
 class AISettingsResponse(AISettingsBase):
@@ -28,17 +30,23 @@ class AISettingsResponse(AISettingsBase):
     id: int
     customer_gemini_key_configured: bool
     customer_anthropic_key_configured: bool
+    customer_openai_key_configured: bool
     platform_gemini_key_configured: bool
     platform_anthropic_key_configured: bool
+    platform_openai_key_configured: bool
     gemini_key_configured: bool
     anthropic_key_configured: bool
+    openai_key_configured: bool
     gemini_key_masked: str
     anthropic_key_masked: str
+    openai_key_masked: str
     effective_gemini_credential_source: str
     effective_anthropic_credential_source: str
+    effective_openai_credential_source: str
     credential_policy_label: str
     gemini_key_updated_at: Optional[datetime] = None
     anthropic_key_updated_at: Optional[datetime] = None
+    openai_key_updated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

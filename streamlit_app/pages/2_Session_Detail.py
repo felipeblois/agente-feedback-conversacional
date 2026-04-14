@@ -29,8 +29,9 @@ from ui import (
 
 
 ENGINE_OPTIONS = {
-    "Gemini": {"provider": "gemini", "label": "Gemini"},
-    "claude-3-5-haiku": {"provider": "anthropic", "label": "Claude 3.5 Haiku"},
+    "Gemini": {"provider": "gemini", "model": "gemini-2.5-flash", "label": "Gemini"},
+    "ChatGPT": {"provider": "openai", "model": "gpt-4.1-mini", "label": "ChatGPT"},
+    "Claude": {"provider": "anthropic", "model": "claude-3-5-haiku-20241022", "label": "Claude 3.5 Haiku"},
     "Jarvis": {"provider": "fallback", "label": "Jarvis"},
 }
 
@@ -49,6 +50,8 @@ def friendly_provider_name(provider: Optional[str], model: Optional[str] = None)
 
     if normalized == "gemini":
         return "Gemini"
+    if normalized == "openai" or "gpt" in normalized_model:
+        return "ChatGPT"
     if normalized == "anthropic" or "claude" in normalized_model:
         return "Claude 3.5 Haiku"
     if normalized in {"fallback", "static_fallback", "llm_fallback_parse_error", "empty"}:
@@ -136,7 +139,11 @@ with header_cols[1]:
         with st.spinner("Processando feedbacks da sessao..."):
             try:
                 provider = ENGINE_OPTIONS[engine]["provider"]
-                api_post(f"/sessions/{selected_id}/analyze", {"provider": provider})
+                model = ENGINE_OPTIONS[engine].get("model")
+                payload = {"provider": provider}
+                if model:
+                    payload["model"] = model
+                api_post(f"/sessions/{selected_id}/analyze", payload)
                 st.success("Analise atualizada com sucesso.")
                 st.rerun()
             except Exception as exc:

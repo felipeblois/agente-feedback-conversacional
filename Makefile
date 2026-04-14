@@ -35,6 +35,7 @@ run: ## Sobe backend + streamlit (background)
 	@echo "📖 API Docs: http://localhost:8000/docs"
 
 test: ## Roda testes
+	$(PYTHON) -m alembic upgrade head
 	$(PYTHON) -m pytest tests/ -v
 
 seed: ## Popula banco com dados de exemplo

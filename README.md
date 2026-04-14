@@ -62,6 +62,7 @@ Variaveis principais para cloud:
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 - `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 
 Fluxo recomendado no Render:
@@ -179,6 +180,13 @@ Use a pagina `Configuracoes` no painel para definir se a instancia usa:
 O runtime segue a ordem `Gemini -> Anthropic -> Jarvis`.
 As alteracoes de settings passam a registrar uma trilha minima de auditoria no backend.
 
+O painel de configuracoes agora aceita:
+- `Gemini`
+- `OpenAI`
+- `Claude`
+
+para motor principal e fallback, conforme a estrategia da instancia.
+
 ## Comandos disponiveis
 
 | Comando | Descricao |
@@ -209,11 +217,15 @@ As alteracoes de settings passam a registrar uma trilha minima de auditoria no b
 
 ## Estrategia de LLM
 
-1. Gemini como provedor principal
-2. Anthropic como fallback cloud
-3. Regras estaticas como failsafe final
+O painel agora pode operar com:
 
-Se os dois provedores cloud falharem, o sistema continua respondendo com a analise estatica local.
+1. Gemini
+2. OpenAI
+3. Claude
+
+em qualquer combinacao entre motor principal e fallback cloud.
+
+Se os provedores cloud falharem, o sistema continua respondendo com a analise estatica local.
 
 ## Modelo comercial
 
