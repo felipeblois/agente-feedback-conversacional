@@ -137,6 +137,9 @@ def configure_page(title: str, icon: str) -> None:
 
 def ensure_admin_access() -> None:
     if st.session_state.get(AUTH_STATE_KEY):
+        token = st.session_state.get(AUTH_TOKEN_KEY, "")
+        if token and st.query_params.get(AUTH_QUERY_PARAM) != token:
+            st.query_params[AUTH_QUERY_PARAM] = token
         _sync_auth_storage_if_needed()
         return
 
