@@ -122,10 +122,13 @@ except Exception:
 
 confirm_delete_key = f"confirm_delete_{selected_id}"
 confirm_archive_key = f"confirm_archive_{selected_id}"
+analysis_run_key = f"analysis_run_{selected_id}"
 if confirm_delete_key not in st.session_state:
     st.session_state[confirm_delete_key] = False
 if confirm_archive_key not in st.session_state:
     st.session_state[confirm_archive_key] = False
+if analysis_run_key not in st.session_state:
+    st.session_state[analysis_run_key] = False
 
 render_spotlight_card(
     "Sessao ativa",
@@ -149,26 +152,40 @@ with header_cols[0]:
         horizontal=False,
     )
 with header_cols[1]:
-    if st.button("Gerar analise", use_container_width=True):
-        with st.spinner("Processando feedbacks da sessao..."):
-            try:
-                provider = ENGINE_OPTIONS[engine]["provider"]
-                model = ENGINE_OPTIONS[engine].get("model")
-                payload = {"provider": provider}
-                if model:
-                    payload["model"] = model
-                api_post(f"/sessions/{selected_id}/analyze", payload)
-                push_flash("success", "Analise atualizada com sucesso.")
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+    if st.button(
+        "Gerar analise",
+        use_container_width=True,
+        disabled=st.session_state[analysis_run_key],
+    ):
+        st.session_state[analysis_run_key] = True
+        st.rerun()
 with header_cols[2]:
     if not st.session_state[confirm_archive_key]:
-        if st.button("Arquivar", use_container_width=True):
+        if st.button(
+            "Arquivar",
+            use_container_width=True,
+            disabled=st.session_state[analysis_run_key],
+        ):
             st.session_state[confirm_archive_key] = True
             st.rerun()
 with header_cols[3]:
     clipboard_button("Copiar link publico", detail["public_url"], f"copy-{selected_id}")
+
+if st.session_state[analysis_run_key]:
+    with st.spinner("Processando feedbacks da sessao..."):
+        try:
+            provider = ENGINE_OPTIONS[engine]["provider"]
+            model = ENGINE_OPTIONS[engine].get("model")
+            payload = {"provider": provider}
+            if model:
+                payload["model"] = model
+            api_post(f"/sessions/{selected_id}/analyze", payload)
+            push_flash("success", "Analise atualizada com sucesso.")
+        except Exception as exc:
+            push_flash("error", str(exc))
+        finally:
+            st.session_state[analysis_run_key] = False
+    st.rerun()
 
 if st.session_state[confirm_archive_key]:
     st.warning("Ao arquivar, a sessao sai da operacao ativa e vai para Sessoes Arquivadas.")
