@@ -19,6 +19,7 @@ from ui import (
     render_spotlight_card,
     render_stat_band,
     status_pill,
+    push_flash,
 )
 
 
@@ -45,7 +46,7 @@ panel_header(
 try:
     archived_sessions = api_get("/sessions?status=archived")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar as sessoes arquivadas: {exc}")
+    st.error(str(exc))
     st.stop()
 
 if not archived_sessions:
@@ -141,7 +142,7 @@ st.session_state["selected_archived_session_id"] = selected_id
 try:
     detail = api_get(f"/sessions/{selected_id}/detail")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar o detalhe da sessao arquivada: {exc}")
+    st.error(str(exc))
     st.stop()
 
 try:
@@ -185,10 +186,10 @@ with header_cols[1]:
             api_post(f"/sessions/{selected_id}/reactivate")
             st.session_state["selected_session_id"] = selected_id
             st.session_state.pop("selected_archived_session_id", None)
-            st.success("Sessao reativada com sucesso.")
+            push_flash("success", "Sessao reativada com sucesso.")
             st.switch_page("pages/2_Session_Detail.py")
         except Exception as exc:
-            st.error(f"Nao foi possivel reativar a sessao: {exc}")
+            st.error(str(exc))
 
 main_col, side_col = st.columns([1.55, 1])
 

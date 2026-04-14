@@ -44,6 +44,21 @@ QUESTIONS_MAP = {
     ],
 }
 
+JARVIS_STYLE_PROMPTS = {
+    "detractor": [
+        "Qual ajuste mais aumentaria o valor desta experiencia para voce?",
+        "Que ponto desta sessao precisaria mudar primeiro para funcionar melhor?",
+    ],
+    "neutral": [
+        "O que faltou para esta experiencia ficar realmente forte para voce?",
+        "Que melhoria simples deixaria esta sessao mais util no seu contexto?",
+    ],
+    "promoter": [
+        "Qual aspecto positivo desta sessao mais merece ser reforcado?",
+        "Que aprendizado desta experiencia mais vale registrar como destaque?",
+    ],
+}
+
 FEEDBACK_LABELS = {
     "treinamento": "treinamento",
     "palestra": "palestra",
@@ -75,7 +90,22 @@ class ConversationService:
             return {"next_question": None, "finished": True, "finish_reason": "missing_context"}
 
         system_questions_asked = await self._count_system_questions(db, response_id)
+        participant_answers = await self._participant_answers(db, response_id)
+        signal_strength = self._signal_strength(participant_answers)
+        score_segment = await self._get_score_segment(response.score)
         minimum_required = self._minimum_required_questions(max_questions)
+
+        log_event(
+            "info",
+            "conversation_signal_evaluated",
+            session_id=session.id,
+            response_id=response_id,
+            signal_strength=signal_strength,
+            participant_answers=len(participant_answers),
+            questions_asked=system_questions_asked,
+            max_questions=max_questions,
+        )
+
         if system_questions_asked >= max_questions:
             log_event(
                 "info",
@@ -98,11 +128,21 @@ class ConversationService:
             response_id=response_id,
             session=session,
             score=response.score,
+            score_segment=score_segment,
             system_questions_asked=system_questions_asked,
+            max_questions=max_questions,
+            participant_answers=participant_answers,
+            signal_strength=signal_strength,
+        )
+
+        force_continue = self._should_force_continue(
+            participant_answers=participant_answers,
+            system_questions_asked=system_questions_asked,
+            minimum_required=minimum_required,
             max_questions=max_questions,
         )
 
-        if llm_result.get("should_finish") is True and system_questions_asked >= minimum_required:
+        if llm_result.get("should_finish") is True and not force_continue and system_questions_asked >= minimum_required:
             log_event(
                 "info",
                 "conversation_finished",
@@ -118,18 +158,32 @@ class ConversationService:
                 "finished": True,
                 "finish_reason": "llm_sufficient_context",
             }
+        elif llm_result.get("should_finish") is True and force_continue:
+            log_event(
+                "info",
+                "conversation_finish_overridden",
+                session_id=session.id,
+                response_id=response_id,
+                reason="insufficient_participant_signal",
+                questions_asked=system_questions_asked,
+                minimum_required=minimum_required,
+            )
 
         question_text = llm_result.get("question")
         question_source = llm_result.get("source", "unknown")
 
-        if not question_text:
+        if not question_text and force_continue:
+            question_text = self._build_signal_recovery_question(session, score_segment, participant_answers)
+            question_source = "jarvis_recovery"
+        elif not question_text:
             question_text = await self._build_fallback_question(
                 session=session,
                 score=response.score,
+                score_segment=score_segment,
                 system_questions_asked=system_questions_asked,
                 max_questions=max_questions,
             )
-            question_source = "fallback"
+            question_source = "jarvis"
 
         if not question_text:
             finish_reason = (
@@ -238,8 +292,11 @@ class ConversationService:
         response_id: int,
         session: Session,
         score: int,
+        score_segment: str,
         system_questions_asked: int,
         max_questions: int,
+        participant_answers: List[str],
+        signal_strength: str,
     ) -> Dict[str, object]:
         history_text = await self._conversation_history_text(db, response_id)
         prompt = build_conversation_prompt(
@@ -248,6 +305,9 @@ class ConversationService:
             system_questions_asked=system_questions_asked,
             max_questions=max_questions,
             history_text=history_text,
+            participant_answers_count=len(participant_answers),
+            participant_signal_strength=signal_strength,
+            score_segment=score_segment,
         )
 
         response = await call_llm(
@@ -279,6 +339,7 @@ class ConversationService:
 
         should_finish = bool(parsed.get("should_finish", False))
         question = self._sanitize_question(parsed.get("next_question", ""))
+        reason = str(parsed.get("reason", "")).strip()[:80] or "not_informed"
 
         if should_finish:
             log_event(
@@ -287,6 +348,7 @@ class ConversationService:
                 session_id=session.id,
                 response_id=response_id,
                 question_index=system_questions_asked + 1,
+                reason=reason,
             )
             return {"question": None, "should_finish": True, "source": "gemini"}
 
@@ -307,6 +369,7 @@ class ConversationService:
             response_id=response_id,
             provider="gemini",
             question_index=system_questions_asked + 1,
+            reason=reason,
         )
         return {"question": question, "should_finish": False, "source": "gemini"}
 
@@ -326,10 +389,11 @@ class ConversationService:
         self,
         session: Session,
         score: int,
+        score_segment: str,
         system_questions_asked: int,
         max_questions: int,
     ) -> Optional[str]:
-        segment = await self._get_score_segment(score)
+        segment = score_segment or await self._get_score_segment(score)
         generated_sequence = self._build_fallback_sequence(session, segment, max_questions)
         if system_questions_asked < len(generated_sequence):
             return generated_sequence[system_questions_asked]
@@ -404,7 +468,13 @@ class ConversationService:
         ]
 
         sequence = []
-        for item in base_questions + contextual_questions + segment_tail.get(segment, []) + final_closer:
+        for item in (
+            JARVIS_STYLE_PROMPTS.get(segment, [])
+            + contextual_questions
+            + base_questions
+            + segment_tail.get(segment, [])
+            + final_closer
+        ):
             question = self._sanitize_question(item)
             if self._is_valid_question(question) and question not in sequence:
                 sequence.append(question)
@@ -413,7 +483,11 @@ class ConversationService:
         return sequence
 
     def _minimum_required_questions(self, max_questions: int) -> int:
-        return min(max_questions, 2)
+        if max_questions <= 2:
+            return min(max_questions, 1)
+        if max_questions <= 5:
+            return 2
+        return 3
 
     async def _get_score_segment(self, score: int, max_val: int = 10) -> str:
         if max_val == 10:
@@ -460,6 +534,68 @@ class ConversationService:
         lowered = question.lower()
         forbidden_snippets = ["json", "```", "{", "}", "responda", "retorne"]
         return not any(snippet in lowered for snippet in forbidden_snippets)
+
+    async def _participant_answers(self, db: AsyncSession, response_id: int) -> List[str]:
+        result = await db.execute(
+            select(Message.message_text)
+            .where(
+                Message.response_id == response_id,
+                Message.sender == "participant",
+                Message.message_text.is_not(None),
+            )
+            .order_by(Message.message_order.asc(), Message.created_at.asc())
+        )
+        return [str(text).strip() for text in result.scalars().all() if str(text).strip()]
+
+    def _signal_strength(self, participant_answers: List[str]) -> str:
+        if not participant_answers:
+            return "weak"
+        total_chars = sum(len(answer) for answer in participant_answers)
+        meaningful_answers = sum(1 for answer in participant_answers if len(answer.split()) >= 4)
+        if meaningful_answers >= 2 and total_chars >= 100:
+            return "strong"
+        if meaningful_answers >= 1 and total_chars >= 25:
+            return "medium"
+        return "weak"
+
+    def _should_force_continue(
+        self,
+        participant_answers: List[str],
+        system_questions_asked: int,
+        minimum_required: int,
+        max_questions: int,
+    ) -> bool:
+        if system_questions_asked >= max_questions:
+            return False
+        if not participant_answers:
+            return False
+        if system_questions_asked < minimum_required:
+            return True
+        return self._signal_strength(participant_answers) == "weak" and system_questions_asked < max_questions
+
+    def _build_signal_recovery_question(
+        self,
+        session: Session,
+        score_segment: str,
+        participant_answers: List[str],
+    ) -> Optional[str]:
+        last_answer = participant_answers[-1].strip() if participant_answers else ""
+        label = FEEDBACK_LABELS.get(session.score_type, "sessao")
+        topic = session.theme_summary or session.session_goal or session.topics_to_explore or label
+
+        if last_answer and len(last_answer.split()) <= 3:
+            question = (
+                f'Voce pode dar um exemplo rapido do que mais influenciou sua opiniao sobre "{topic}"?'
+            )
+        elif score_segment == "promoter":
+            question = f'Qual resultado pratico deste {label} voce acredita que vai aplicar primeiro?'
+        elif score_segment == "detractor":
+            question = f'Qual ajuste mais faria diferenca para voce em uma proxima edicao deste {label}?'
+        else:
+            question = f'Qual ponto deste {label} mais mereceria um pouco mais de aprofundamento?'
+
+        question = self._sanitize_question(question)
+        return question if self._is_valid_question(question) else None
 
 
 conversation_service = ConversationService()

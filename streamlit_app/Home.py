@@ -18,6 +18,7 @@ from ui import (
     render_sidebar,
     render_spotlight_card,
     render_stat_band,
+    push_flash,
 )
 
 
@@ -41,7 +42,7 @@ with top_action:
 try:
     summary = api_get("/sessions/dashboard/summary")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar o dashboard: {exc}")
+    st.error(str(exc))
     st.stop()
 
 recent_sessions = summary.get("recent_sessions", [])
@@ -152,6 +153,7 @@ with right:
         st.switch_page("pages/1_Sessions.py")
     if st.button("Abrir sessao em destaque", use_container_width=True):
         st.session_state["selected_session_id"] = recent_sessions[0]["id"]
+        push_flash("info", "Sessao em destaque aberta para continuar a operacao.")
         st.switch_page("pages/2_Session_Detail.py")
     if st.button("Ver sessoes arquivadas", use_container_width=True):
         st.switch_page("pages/4_Archived_Sessions.py")

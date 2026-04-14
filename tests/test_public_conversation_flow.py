@@ -133,8 +133,8 @@ async def test_public_flow_uses_fallback_when_llm_fails(async_client: AsyncClien
 
 def test_minimum_required_questions_rule():
     assert conversation_service._minimum_required_questions(1) == 1
-    assert conversation_service._minimum_required_questions(2) == 2
-    assert conversation_service._minimum_required_questions(6) == 2
+    assert conversation_service._minimum_required_questions(2) == 1
+    assert conversation_service._minimum_required_questions(6) == 3
 
 
 @pytest.mark.asyncio
@@ -162,5 +162,111 @@ async def test_finish_endpoint_marks_response_as_completed(async_client: AsyncCl
         response = db_result.scalar_one()
         assert response.status == "completed"
         assert response.completed_at is not None
+    finally:
+        await async_client.delete(f"/api/v1/sessions/{session_id}")
+
+
+@pytest.mark.asyncio
+async def test_public_flow_overrides_early_finish_when_signal_is_weak(async_client: AsyncClient, monkeypatch):
+    created = await _create_session(async_client, max_followup_questions=3)
+    token = created["public_token"]
+    session_id = created["id"]
+
+    llm_answers = iter(
+        [
+            '{"next_question":"Qual parte do treinamento mais chamou sua atencao?","should_finish":false,"reason":"first_follow_up"}',
+            '{"next_question":"","should_finish":true,"reason":"context_sufficient"}',
+            '{"next_question":"","should_finish":true,"reason":"context_sufficient"}',
+        ]
+    )
+
+    async def fake_call_llm(*args, **kwargs):
+        return next(llm_answers)
+
+    monkeypatch.setattr("app.services.conversation_service.call_llm", fake_call_llm)
+
+    try:
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": True},
+        )
+        response_id = start_response.json()["response_id"]
+
+        score_response = await async_client.post(
+            f"/api/v1/public/{token}/score",
+            json={"response_id": response_id, "score": 8},
+        )
+        assert score_response.status_code == 200
+        assert score_response.json()["conversation_finished"] is False
+
+        weak_answer_response = await async_client.post(
+            f"/api/v1/public/{token}/message",
+            json={"response_id": response_id, "message": "Bom."},
+        )
+        weak_payload = weak_answer_response.json()
+        assert weak_payload["conversation_finished"] is False
+        assert "exemplo" in weak_payload["next_question"]["text"].lower() or "aprofundamento" not in weak_payload["next_question"]["text"].lower()
+
+        stronger_answer_response = await async_client.post(
+            f"/api/v1/public/{token}/message",
+            json={"response_id": response_id, "message": "Os exemplos praticos ajudaram porque mostraram como aplicar com a equipe."},
+        )
+        stronger_payload = stronger_answer_response.json()
+        assert stronger_payload["conversation_finished"] is True
+        assert stronger_payload["finish_reason"] == "llm_sufficient_context"
+    finally:
+        await async_client.delete(f"/api/v1/sessions/{session_id}")
+
+
+@pytest.mark.asyncio
+async def test_public_flow_longer_session_requires_more_context(async_client: AsyncClient, monkeypatch):
+    created = await _create_session(async_client, max_followup_questions=6)
+    token = created["public_token"]
+    session_id = created["id"]
+
+    llm_answers = iter(
+        [
+            '{"next_question":"Qual parte foi mais util para voce?","should_finish":false,"reason":"first"}',
+            '{"next_question":"Que exemplo mais ajudou voce a entender o conteudo?","should_finish":false,"reason":"second"}',
+            '{"next_question":"","should_finish":true,"reason":"context_sufficient"}',
+            '{"next_question":"","should_finish":true,"reason":"context_sufficient"}',
+        ]
+    )
+
+    async def fake_call_llm(*args, **kwargs):
+        return next(llm_answers)
+
+    monkeypatch.setattr("app.services.conversation_service.call_llm", fake_call_llm)
+
+    try:
+        start_response = await async_client.post(
+            f"/api/v1/public/{token}/start",
+            json={"anonymous": True, "consent_accepted": True},
+        )
+        response_id = start_response.json()["response_id"]
+
+        score_response = await async_client.post(
+            f"/api/v1/public/{token}/score",
+            json={"response_id": response_id, "score": 9},
+        )
+        assert score_response.json()["conversation_finished"] is False
+
+        second_step = await async_client.post(
+            f"/api/v1/public/{token}/message",
+            json={"response_id": response_id, "message": "A organizacao foi boa."},
+        )
+        assert second_step.json()["conversation_finished"] is False
+
+        third_step = await async_client.post(
+            f"/api/v1/public/{token}/message",
+            json={"response_id": response_id, "message": "Os exemplos mostraram como aplicar com a equipe no dia a dia."},
+        )
+        assert third_step.json()["conversation_finished"] is False
+
+        final_step = await async_client.post(
+            f"/api/v1/public/{token}/message",
+            json={"response_id": response_id, "message": "Tambem gostei da clareza e vou testar isso na rotina."},
+        )
+        assert final_step.json()["conversation_finished"] is True
     finally:
         await async_client.delete(f"/api/v1/sessions/{session_id}")

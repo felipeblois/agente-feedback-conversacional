@@ -26,6 +26,7 @@ from ui import (
     render_spotlight_card,
     render_stat_band,
     status_pill,
+    push_flash,
 )
 
 
@@ -85,7 +86,7 @@ panel_header(
 try:
     sessions = api_get("/sessions")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar as sessoes: {exc}")
+    st.error(str(exc))
     st.stop()
 
 if not sessions:
@@ -111,7 +112,7 @@ st.session_state["selected_session_id"] = selected_id
 try:
     detail = api_get(f"/sessions/{selected_id}/detail")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar o detalhe da sessao: {exc}")
+    st.error(str(exc))
     st.stop()
 
 try:
@@ -157,10 +158,10 @@ with header_cols[1]:
                 if model:
                     payload["model"] = model
                 api_post(f"/sessions/{selected_id}/analyze", payload)
-                st.success("Analise atualizada com sucesso.")
+                push_flash("success", "Analise atualizada com sucesso.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Falha ao gerar analise: {exc}")
+                st.error(str(exc))
 with header_cols[2]:
     if not st.session_state[confirm_archive_key]:
         if st.button("Arquivar", use_container_width=True):
@@ -178,10 +179,10 @@ if st.session_state[confirm_archive_key]:
                 api_post(f"/sessions/{selected_id}/archive")
                 st.session_state["selected_archived_session_id"] = selected_id
                 st.session_state[confirm_archive_key] = False
-                st.success("Sessao arquivada com sucesso.")
+                push_flash("success", "Sessao arquivada com sucesso.")
                 st.switch_page("pages/4_Archived_Sessions.py")
             except Exception as exc:
-                st.error(f"Nao foi possivel arquivar a sessao: {exc}")
+                st.error(str(exc))
     with archive_cols[1]:
         if st.button("Cancelar arquivamento", use_container_width=True):
             st.session_state[confirm_archive_key] = False
@@ -452,10 +453,10 @@ with edit_tab:
                         "public_link_expires_at": public_link_expires_at,
                     },
                 )
-                st.success("Sessao atualizada com sucesso.")
+                push_flash("success", "Sessao atualizada com sucesso.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Nao foi possivel atualizar a sessao: {exc}")
+                st.error(str(exc))
 
     st.markdown("### Controle do link publico")
     link_control_cols = st.columns(3)
@@ -463,26 +464,26 @@ with edit_tab:
         if st.button("Revogar link", use_container_width=True):
             try:
                 api_post(f"/sessions/{selected_id}/public-link/revoke")
-                st.success("Link publico revogado com sucesso.")
+                push_flash("success", "Link publico revogado com sucesso.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Nao foi possivel revogar o link: {exc}")
+                st.error(str(exc))
     with link_control_cols[1]:
         if st.button("Reativar link", use_container_width=True):
             try:
                 api_post(f"/sessions/{selected_id}/public-link/reactivate")
-                st.success("Link publico reativado com sucesso.")
+                push_flash("success", "Link publico reativado com sucesso.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Nao foi possivel reativar o link: {exc}")
+                st.error(str(exc))
     with link_control_cols[2]:
         if st.button("Gerar novo link", use_container_width=True):
             try:
                 api_post(f"/sessions/{selected_id}/public-link/rotate")
-                st.success("Novo link publico gerado com sucesso.")
+                push_flash("success", "Novo link publico gerado com sucesso.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Nao foi possivel gerar um novo link: {exc}")
+                st.error(str(exc))
 
     render_stat_band(
         [
@@ -529,10 +530,10 @@ with edit_tab:
                         st.session_state["selected_session_id"] = remaining_ids[current_index] if current_index < len(remaining_ids) else remaining_ids[-1]
                     else:
                         st.session_state.pop("selected_session_id", None)
-                    st.success("Sessao excluida com sucesso.")
+                    push_flash("success", "Sessao excluida com sucesso.")
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"Nao foi possivel excluir a sessao: {exc}")
+                    st.error(str(exc))
         with confirm_cols[1]:
             if st.button("Cancelar exclusao", use_container_width=True):
                 st.session_state[confirm_delete_key] = False
@@ -547,10 +548,19 @@ with export_tab:
     )
     st.code(detail["public_url"])
     export_cols = st.columns(2)
+    csv_ready_key = f"csv_export_ready_{selected_id}"
+    pdf_ready_key = f"pdf_export_ready_{selected_id}"
     with export_cols[0]:
-        try:
-            csv_bytes = api_get_bytes(f"/sessions/{selected_id}/export/csv")
-        except Exception:
+        if detail["response_count"] > 0:
+            if st.button("Preparar CSV", key=f"prepare-csv-{selected_id}", use_container_width=True):
+                try:
+                    st.session_state[csv_ready_key] = api_get_bytes(f"/sessions/{selected_id}/export/csv")
+                    push_flash("success", "CSV preparado para download.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            csv_bytes = st.session_state.get(csv_ready_key)
+        else:
             csv_bytes = None
         if csv_bytes:
             st.download_button(
@@ -563,9 +573,16 @@ with export_tab:
         else:
             empty_state("CSV indisponivel", "Sem respostas para exportar em CSV.")
     with export_cols[1]:
-        try:
-            pdf_bytes = api_get_bytes(f"/sessions/{selected_id}/export/pdf")
-        except Exception:
+        if analysis:
+            if st.button("Preparar PDF", key=f"prepare-pdf-{selected_id}", use_container_width=True):
+                try:
+                    st.session_state[pdf_ready_key] = api_get_bytes(f"/sessions/{selected_id}/export/pdf")
+                    push_flash("success", "PDF preparado para download.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            pdf_bytes = st.session_state.get(pdf_ready_key)
+        else:
             pdf_bytes = None
         if pdf_bytes:
             st.download_button(
