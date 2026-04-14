@@ -21,6 +21,12 @@ scripts/status.sh
 # 7. Para encerrar quando terminar
 scripts/stop_all.sh
 
+# 8. Backup operacional
+scripts/backup.sh manual
+
+# 9. Validar restore de backup
+scripts/backup_verify.sh data/backups/insightflow_backup_<timestamp>_manual.tar.gz
+
 # URLs principais
 # API: http://localhost:8000
 # Admin: http://localhost:8501

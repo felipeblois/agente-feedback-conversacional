@@ -1,4 +1,4 @@
-.PHONY: setup db run-api run-streamlit run test seed clean help
+.PHONY: setup db run-api run-streamlit run test seed backup restore verify-backup clean help
 
 VENV = .venv
 PYTHON = $(VENV)/bin/python
@@ -37,6 +37,15 @@ run: ## Sobe backend + streamlit (background)
 test: ## Roda testes
 	$(PYTHON) -m alembic upgrade head
 	$(PYTHON) -m pytest tests/ -v
+
+backup: ## Gera backup da instancia local (use BACKUP_LABEL=nome opcional)
+	bash scripts/backup.sh $(BACKUP_LABEL)
+
+restore: ## Restaura backup no projeto atual (use BACKUP_FILE=caminho e confirme com RESTORE_ARGS=--yes)
+	bash scripts/restore.sh $(BACKUP_FILE) $(RESTORE_ARGS)
+
+verify-backup: ## Valida um backup em restore temporario (use BACKUP_FILE=caminho)
+	bash scripts/backup_verify.sh $(BACKUP_FILE)
 
 seed: ## Popula banco com dados de exemplo
 	$(PYTHON) scripts/seed_demo_data.py

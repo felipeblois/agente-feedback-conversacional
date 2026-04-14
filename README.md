@@ -138,6 +138,12 @@ scripts/stop_all.sh
 
 # testes
 scripts/test.sh
+
+# backup
+scripts/backup.sh manual
+
+# validar backup
+scripts/backup_verify.sh data/backups/insightflow_backup_<timestamp>_manual.tar.gz
 ```
 
 ## Fluxo de uso
@@ -204,6 +210,9 @@ para motor principal e fallback, conforme a estrategia da instancia.
 | `scripts/status.sh` | Mostra status da stack e portas em uso |
 | `scripts/stop_all.sh` | Finaliza API e Streamlit da stack local |
 | `scripts/test.sh` | Executa os testes pela venv Linux |
+| `scripts/backup.sh` | Gera backup da instancia com `.env`, banco SQLite e exportacoes |
+| `scripts/restore.sh` | Restaura um backup no ambiente atual ou em diretório de teste |
+| `scripts/backup_verify.sh` | Valida um backup via restore temporario |
 
 ## Roteiro recomendado para piloto
 
@@ -239,6 +248,7 @@ Se os provedores cloud falharem, o sistema continua respondendo com a analise es
 - `USER_MANUAL.md`: operacao do painel e do fluxo participante
 - `DEMO_PLAYBOOK.md`: roteiro curto para demos e pilotos assistidos
 - `PRIVACY_AND_RETENTION.md`: regras minimas de privacidade, retencao e LGPD operacional
+- `BACKUP_AND_RESTORE.md`: rotina de backup, restore e contingencia
 
 ## Stack
 
