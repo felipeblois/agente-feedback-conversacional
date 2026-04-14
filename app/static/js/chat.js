@@ -15,6 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
         startBtn: document.getElementById("start-chat-btn"),
         startContainer: document.getElementById("start-container"),
         participantName: document.getElementById("participant-name"),
+        website: document.getElementById("website"),
+        consentCheckbox: document.getElementById("consent-checkbox"),
     };
 
     function addMessage(text, type) {
@@ -75,9 +77,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     els.startBtn.addEventListener("click", async () => {
         const participantName = els.participantName ? els.participantName.value.trim() : "";
+        const website = els.website ? els.website.value.trim() : "";
+        const consentAccepted = Boolean(els.consentCheckbox && els.consentCheckbox.checked);
+
+        if (!consentAccepted) {
+            addMessage("Voce precisa concordar com o uso das respostas para iniciar o feedback.", "system");
+            return;
+        }
+
         const startPayload = participantName
-            ? { anonymous: false, participant_name: participantName }
-            : { anonymous: true };
+            ? { anonymous: false, participant_name: participantName, consent_accepted: true, website }
+            : { anonymous: true, consent_accepted: true, website };
 
         try {
             const res = await fetch(`/api/v1/public/${token}/start`, {
@@ -85,6 +95,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(startPayload),
             });
+            if (!res.ok) {
+                const errorPayload = await res.json().catch(() => ({}));
+                throw new Error(errorPayload.detail || "Erro ao iniciar conversa.");
+            }
             const data = await res.json();
 
             els.startContainer.style.display = "none";
@@ -92,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
             handleNextQuestion(data.first_question);
         } catch (error) {
             console.error(error);
-            addMessage("Erro ao iniciar conversa. Tente recarregar.", "system");
+            addMessage(error.message || "Erro ao iniciar conversa. Tente recarregar.", "system");
         }
     });
 

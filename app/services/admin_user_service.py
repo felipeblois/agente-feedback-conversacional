@@ -1,8 +1,12 @@
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from app.core.config import get_settings
+from app.core.security import get_admin_api_token, verify_admin_session_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.admin_session import AdminSession
 from app.models.admin_user import AdminUser
 
 
@@ -80,6 +84,29 @@ class AdminUserService:
     async def delete_user(self, db: AsyncSession, user: AdminUser) -> None:
         await db.delete(user)
         await db.commit()
+
+    async def get_session_payload(self, db: AsyncSession, token: str) -> Dict:
+        if token == get_admin_api_token():
+            settings = get_settings()
+            return {
+                "authenticated": True,
+                "actor": settings.admin_username,
+                "source": "bootstrap_token",
+                "expires_at": datetime.utcnow() + timedelta(days=3650),
+            }
+        payload = verify_admin_session_token(token)
+        if not payload:
+            raise ValueError("Invalid session token")
+        result = await db.execute(select(AdminSession).where(AdminSession.id == payload["session_id"]))
+        session = result.scalar_one_or_none()
+        if not session:
+            raise ValueError("Session not found")
+        return {
+            "authenticated": True,
+            "actor": session.actor_username,
+            "source": session.source,
+            "expires_at": session.expires_at,
+        }
 
 
 admin_user_service = AdminUserService()

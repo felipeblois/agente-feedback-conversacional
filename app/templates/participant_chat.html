@@ -44,7 +44,29 @@
                 maxlength="120"
                 placeholder="Digite seu nome"
             />
+            <input
+                id="website"
+                class="honeypot-field"
+                type="text"
+                tabindex="-1"
+                autocomplete="off"
+                aria-hidden="true"
+                style="position:absolute; left:-9999px; opacity:0; pointer-events:none;"
+            />
             <p class="start-help">Caso nao coloque seu nome, sua identificacao aparecera como Anonimo.</p>
+            <label class="start-check">
+                <input id="consent-checkbox" type="checkbox" />
+                <span>Li e concordo em compartilhar minhas respostas para analise desta sessao.</span>
+            </label>
+            <div class="privacy-note">
+                <p>Seu feedback sera usado para consolidar aprendizados e melhorar a experiencia desta sessao.</p>
+                <p>Base legal informada pela organizacao: {{ privacy_legal_basis_label }}.</p>
+                <p>{{ privacy_ai_disclaimer }}</p>
+                <p>Retencao operacional de respostas e analises: ate {{ retention_policy.responses_days }} dias. Exportacoes operacionais: ate {{ retention_policy.exports_days }} dias.</p>
+                {% if privacy_contact_email %}
+                    <p>Contato para privacidade: {{ privacy_contact_email }}</p>
+                {% endif %}
+            </div>
             <button id="start-chat-btn" class="start-btn">Iniciar Feedback</button>
         </div>
     </div>

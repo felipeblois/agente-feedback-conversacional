@@ -1,7 +1,12 @@
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import delete
+
+from app.core.security import issue_admin_session_token
+from app.models.admin_session import AdminSession
 
 
 @pytest.mark.asyncio
@@ -24,24 +29,25 @@ async def test_public_endpoints_remain_available_without_admin_auth(unauthentica
 
     create_response = await unauthenticated_async_client.post(
         "/api/v1/public/invalid-token/start",
-        json={"anonymous": True},
+        json={"anonymous": True, "consent_accepted": True},
     )
     assert create_response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_settings_update_creates_audit_log(async_client: AsyncClient):
+    marker = uuid4().hex[:8]
     update_response = await async_client.put(
         "/api/v1/settings/ai",
         json={
             "credential_mode": "platform",
-            "customer_name": "Cliente teste",
+            "customer_name": f"Cliente teste {marker}",
             "default_provider": "gemini",
             "default_model": "gemini-2.5-flash",
             "fallback_provider": "anthropic",
             "fallback_model": "claude-3-5-haiku-20241022",
             "enable_platform_fallback": True,
-            "notes": "Ajuste auditado pela suite",
+            "notes": f"Ajuste auditado pela suite {marker}",
             "clear_gemini_api_key": False,
             "clear_anthropic_api_key": False,
         },
@@ -52,7 +58,13 @@ async def test_settings_update_creates_audit_log(async_client: AsyncClient):
     assert audit_response.status_code == 200
     payload = audit_response.json()
     assert payload["items"]
-    assert any("customer_name" in item["details"] or "notes" in item["details"] for item in payload["items"])
+    matching_item = next(
+        item
+        for item in payload["items"]
+        if item["area"] == "ai_settings" and item["action"] == "update"
+    )
+    assert matching_item["actor"] == "admin"
+    assert "mode=" in matching_item["details"]
 
 
 @pytest.mark.asyncio
@@ -77,6 +89,102 @@ async def test_bootstrap_admin_login_returns_session_token(unauthenticated_async
     assert payload["success"] is True
     assert payload["actor"] == "admin"
     assert payload["token"].startswith("session.")
+    assert payload["expires_at"]
+
+
+@pytest.mark.asyncio
+async def test_admin_session_endpoint_validates_active_session(unauthenticated_async_client: AsyncClient):
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": "admin", "password": "admin"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    session_response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": token},
+    )
+    assert session_response.status_code == 200
+    payload = session_response.json()
+    assert payload["authenticated"] is True
+    assert payload["actor"] == "admin"
+    assert payload["source"] == "bootstrap"
+
+
+@pytest.mark.asyncio
+async def test_admin_logout_revokes_current_session(unauthenticated_async_client: AsyncClient):
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": "admin", "password": "admin"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    logout_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/logout",
+        headers={"X-Admin-Token": token},
+    )
+    assert logout_response.status_code == 200
+    assert logout_response.json()["success"] is True
+
+    dashboard_response = await unauthenticated_async_client.get(
+        "/api/v1/sessions/dashboard/summary",
+        headers={"X-Admin-Token": token},
+    )
+    assert dashboard_response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_expired_admin_session_is_rejected(
+    unauthenticated_async_client: AsyncClient,
+    db_session,
+):
+    session_id = f"expired_{uuid4().hex[:12]}"
+    expires_at = datetime.utcnow() - timedelta(minutes=5)
+    db_session.add(
+        AdminSession(
+            id=session_id,
+            actor_username="admin",
+            source="bootstrap",
+            expires_at=expires_at,
+        )
+    )
+    await db_session.commit()
+    expired_token = issue_admin_session_token(
+        actor="admin",
+        source="bootstrap",
+        session_id=session_id,
+        expires_at=int(expires_at.timestamp()),
+    )
+
+    response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": expired_token},
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_removed_admin_session_is_rejected_after_restart_like_cleanup(
+    unauthenticated_async_client: AsyncClient,
+    db_session,
+):
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": "admin", "password": "admin"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    await db_session.execute(delete(AdminSession))
+    await db_session.commit()
+
+    response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": token},
+    )
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -149,6 +257,36 @@ async def test_nominal_admin_can_be_deactivated(async_client: AsyncClient, unaut
 
 
 @pytest.mark.asyncio
+async def test_nominal_admin_deactivation_revokes_existing_sessions(async_client: AsyncClient, unauthenticated_async_client: AsyncClient):
+    username = f"pat_{uuid4().hex[:8]}"
+    create_response = await async_client.post(
+        "/api/v1/settings/admin/users",
+        json={"username": username, "full_name": "Pat Rocha", "password": "1234"},
+    )
+    assert create_response.status_code == 200
+    user_payload = create_response.json()
+
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": username, "password": "1234"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    update_response = await async_client.patch(
+        f"/api/v1/settings/admin/users/{user_payload['id']}",
+        json={"full_name": "Pat Rocha", "is_active": False},
+    )
+    assert update_response.status_code == 200
+
+    session_response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": token},
+    )
+    assert session_response.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_nominal_admin_password_can_be_rotated(async_client: AsyncClient, unauthenticated_async_client: AsyncClient):
     username = f"renata_{uuid4().hex[:8]}"
     create_response = await async_client.post(
@@ -176,6 +314,36 @@ async def test_nominal_admin_password_can_be_rotated(async_client: AsyncClient, 
     )
     assert new_login.status_code == 200
     assert new_login.json()["actor"] == username
+
+
+@pytest.mark.asyncio
+async def test_nominal_admin_password_rotation_revokes_existing_sessions(async_client: AsyncClient, unauthenticated_async_client: AsyncClient):
+    username = f"bia_{uuid4().hex[:8]}"
+    create_response = await async_client.post(
+        "/api/v1/settings/admin/users",
+        json={"username": username, "full_name": "Bia Ramos", "password": "1234"},
+    )
+    assert create_response.status_code == 200
+    user_payload = create_response.json()
+
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": username, "password": "1234"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    rotate_response = await async_client.post(
+        f"/api/v1/settings/admin/users/{user_payload['id']}/password",
+        json={"password": "6789"},
+    )
+    assert rotate_response.status_code == 200
+
+    session_response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": token},
+    )
+    assert session_response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -227,3 +395,35 @@ async def test_admin_cannot_delete_own_nominal_user(async_client: AsyncClient, u
     )
     assert self_delete_response.status_code == 400
     assert self_delete_response.json()["detail"] == "You cannot delete your own admin user"
+
+    await async_client.delete(
+        f"/api/v1/settings/admin/users/{user_payload['id']}",
+        headers=async_client.headers,
+    )
+
+
+@pytest.mark.asyncio
+async def test_deleted_nominal_admin_loses_active_session(async_client: AsyncClient, unauthenticated_async_client: AsyncClient):
+    username = f"lia_{uuid4().hex[:8]}"
+    create_response = await async_client.post(
+        "/api/v1/settings/admin/users",
+        json={"username": username, "full_name": "Lia Matos", "password": "1234"},
+    )
+    assert create_response.status_code == 200
+    user_payload = create_response.json()
+
+    login_response = await unauthenticated_async_client.post(
+        "/api/v1/settings/admin/login",
+        json={"username": username, "password": "1234"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["token"]
+
+    delete_response = await async_client.delete(f"/api/v1/settings/admin/users/{user_payload['id']}")
+    assert delete_response.status_code == 200
+
+    session_response = await unauthenticated_async_client.get(
+        "/api/v1/settings/admin/session",
+        headers={"X-Admin-Token": token},
+    )
+    assert session_response.status_code == 401

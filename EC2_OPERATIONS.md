@@ -23,6 +23,27 @@ scripts/ec2_logs.sh admin
 scripts/ec2_logs.sh nginx
 ```
 
+## Backup e restore
+
+Backup manual da instancia:
+
+```bash
+scripts/backup.sh ec2-manual
+```
+
+Validacao de backup:
+
+```bash
+scripts/backup_verify.sh data/backups/insightflow_backup_<timestamp>_ec2-manual.tar.gz
+```
+
+Restore no ambiente atual:
+
+```bash
+scripts/ec2_stop.sh
+scripts/restore.sh data/backups/insightflow_backup_<timestamp>_ec2-manual.tar.gz --yes
+```
+
 ## Sincronizar IP publico no .env
 
 Quando o IP publico da EC2 mudar, atualize o `.env` com:

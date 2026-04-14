@@ -1,17 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db_session
+from app.core.observability import log_event
 from app.core.security import require_admin_api_key
 from app.core.security import (
+    create_admin_session,
     hash_password,
-    issue_admin_session_token,
+    revoke_admin_session,
+    revoke_admin_sessions_for_actor,
+    resolve_admin_token,
     verify_bootstrap_admin_credentials,
     verify_password,
 )
 from app.schemas.admin import (
     AdminLoginRequest,
     AdminLoginResponse,
+    AdminSessionResponse,
     AdminUserCreateRequest,
     AdminUserListResponse,
     AdminUserResponse,
@@ -20,6 +25,7 @@ from app.schemas.admin import (
 )
 from app.schemas.settings import (
     SettingsAuditListResponse,
+    SettingsAuditSummaryResponse,
     SettingsSecurityMetaResponse,
     AISettingsResponse,
     AISettingsTestRequest,
@@ -40,23 +46,56 @@ async def admin_login(payload: AdminLoginRequest, db: AsyncSession = Depends(get
     password = payload.password or ""
 
     if verify_bootstrap_admin_credentials(username, password):
+        session_payload = await create_admin_session(db, username, "bootstrap")
         return {
             "success": True,
-            "token": issue_admin_session_token(username, "bootstrap"),
-            "actor": username,
-            "source": "bootstrap",
+            "token": session_payload["token"],
+            "actor": session_payload["actor"],
+            "source": session_payload["source"],
+            "expires_at": session_payload["expires_at"],
         }
 
     user = await admin_user_service.get_by_username(db, username)
     if not user or not user.is_active or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
 
+    session_payload = await create_admin_session(db, user.username, "db_user")
     return {
         "success": True,
-        "token": issue_admin_session_token(user.username, "db_user"),
-        "actor": user.username,
-        "source": "db_user",
+        "token": session_payload["token"],
+        "actor": session_payload["actor"],
+        "source": session_payload["source"],
+        "expires_at": session_payload["expires_at"],
     }
+
+
+@router.get("/admin/session", response_model=AdminSessionResponse)
+async def get_admin_session(
+    x_admin_token: str = Header(default="", alias="X-Admin-Token"),
+    db: AsyncSession = Depends(get_db_session),
+):
+    resolved = await resolve_admin_token(db, x_admin_token)
+    if not resolved:
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    return await admin_user_service.get_session_payload(db, x_admin_token)
+
+
+@router.post("/admin/logout")
+async def admin_logout(
+    x_admin_token: str = Header(default="", alias="X-Admin-Token"),
+    db: AsyncSession = Depends(get_db_session),
+    actor: str = Depends(require_admin_api_key),
+):
+    revoked = await revoke_admin_session(db, x_admin_token)
+    await settings_service.append_audit_log(
+        db,
+        area="admin_session",
+        action="logout",
+        actor=actor,
+        details="current_session_revoked" if revoked else "session_not_persisted",
+    )
+    await db.commit()
+    return {"success": True}
 
 
 @router.get("/ai", response_model=AISettingsResponse)
@@ -71,9 +110,9 @@ async def get_ai_settings(
 async def update_ai_settings(
     payload: AISettingsUpdate,
     db: AsyncSession = Depends(get_db_session),
-    _: str = Depends(require_admin_api_key),
+    actor: str = Depends(require_admin_api_key),
 ):
-    return await settings_service.update(db, payload, actor="streamlit_admin")
+    return await settings_service.update(db, payload, actor=actor)
 
 
 @router.post("/ai/test", response_model=AISettingsTestResponse)
@@ -85,7 +124,17 @@ async def test_ai_settings(
     try:
         return await test_provider_connection(db, payload.provider, payload.model)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        log_event(
+            "warning",
+            "ai_settings_test_failed",
+            provider=payload.provider,
+            model=payload.model or "auto",
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Nao foi possivel validar a conexao com o provedor agora.",
+        )
 
 
 @router.get("/ai/audit", response_model=SettingsAuditListResponse)
@@ -94,6 +143,17 @@ async def get_ai_settings_audit(
     _: str = Depends(require_admin_api_key),
 ):
     return await settings_service.list_audit_logs(db)
+
+
+@router.get("/audit", response_model=SettingsAuditSummaryResponse)
+async def get_operational_audit(
+    limit: int = 40,
+    area: str = "",
+    db: AsyncSession = Depends(get_db_session),
+    _: str = Depends(require_admin_api_key),
+):
+    selected_area = area.strip() or None
+    return await settings_service.list_operational_audit_logs(db, limit=limit, area=selected_area)
 
 
 @router.get("/admin/meta", response_model=SettingsSecurityMetaResponse)
@@ -159,6 +219,8 @@ async def update_admin_user(
         full_name=payload.full_name.strip(),
         is_active=payload.is_active,
     )
+    if not updated.is_active:
+        await revoke_admin_sessions_for_actor(db, updated.username)
     await settings_service.append_audit_log(
         db,
         area="admin_users",
@@ -194,6 +256,7 @@ async def update_admin_user_password(
         user=user,
         password_hash=hash_password(payload.password),
     )
+    await revoke_admin_sessions_for_actor(db, updated.username)
     await settings_service.append_audit_log(
         db,
         area="admin_users",
@@ -225,6 +288,7 @@ async def delete_admin_user(
         raise HTTPException(status_code=400, detail="You cannot delete your own admin user")
 
     username = user.username
+    await revoke_admin_sessions_for_actor(db, username)
     await admin_user_service.delete_user(db, user)
     await settings_service.append_audit_log(
         db,

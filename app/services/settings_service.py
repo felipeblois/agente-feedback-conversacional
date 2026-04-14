@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.secret_store import seal_secret, unseal_secret
 from app.core.security import get_admin_runtime_meta
 from app.models.ai_settings import AISettings
 from app.models.settings_audit_log import SettingsAuditLog
@@ -23,6 +24,35 @@ def _mask_secret(value: str) -> str:
 
 
 class SettingsService:
+    def _read_customer_secret(self, raw_value: str) -> str:
+        try:
+            return unseal_secret((raw_value or "").strip())
+        except Exception:
+            return ""
+
+    def _resolve_effective_secret(
+        self,
+        credential_mode: str,
+        customer_secret: str,
+        platform_secret: str,
+        allow_platform_fallback: bool,
+    ) -> Tuple[str, str]:
+        if credential_mode == "customer":
+            if customer_secret:
+                return customer_secret, "customer"
+            if allow_platform_fallback and platform_secret:
+                return platform_secret, "platform_fallback"
+            return "", "missing"
+
+        if platform_secret:
+            return platform_secret, "platform"
+        return "", "missing"
+
+    def _credential_policy_label(self, config: AISettings) -> str:
+        if config.credential_mode == "customer":
+            return "Cliente com fallback da plataforma" if config.enable_platform_fallback else "Somente credenciais do cliente"
+        return "Somente credenciais da plataforma"
+
     async def get_or_create(self, db: AsyncSession) -> AISettings:
         result = await db.execute(select(AISettings).limit(1))
         config = result.scalar_one_or_none()
@@ -38,20 +68,27 @@ class SettingsService:
     async def get_runtime_config(self, db: AsyncSession) -> Dict[str, str]:
         config = await self.get_or_create(db)
 
-        customer_gemini = config.gemini_api_key.strip()
-        customer_anthropic = config.anthropic_api_key.strip()
-        use_customer = config.credential_mode == "customer"
-
-        if use_customer:
-            gemini_key = customer_gemini or settings.gemini_api_key
-            anthropic_key = customer_anthropic or settings.anthropic_api_key
-            credential_source = "customer"
-            if not customer_gemini and not customer_anthropic:
-                credential_source = "platform"
-        else:
-            gemini_key = settings.gemini_api_key
-            anthropic_key = settings.anthropic_api_key
-            credential_source = "platform"
+        customer_gemini = self._read_customer_secret(config.gemini_api_key)
+        customer_anthropic = self._read_customer_secret(config.anthropic_api_key)
+        customer_openai = self._read_customer_secret(config.openai_api_key)
+        gemini_key, gemini_credential_source = self._resolve_effective_secret(
+            config.credential_mode,
+            customer_gemini,
+            settings.gemini_api_key,
+            config.enable_platform_fallback,
+        )
+        anthropic_key, anthropic_credential_source = self._resolve_effective_secret(
+            config.credential_mode,
+            customer_anthropic,
+            settings.anthropic_api_key,
+            config.enable_platform_fallback,
+        )
+        openai_key, openai_credential_source = self._resolve_effective_secret(
+            config.credential_mode,
+            customer_openai,
+            settings.openai_api_key,
+            config.enable_platform_fallback,
+        )
 
         return {
             "default_provider": config.default_provider,
@@ -60,7 +97,11 @@ class SettingsService:
             "fallback_model": config.fallback_model,
             "gemini_api_key": gemini_key,
             "anthropic_api_key": anthropic_key,
-            "credential_source": credential_source,
+            "openai_api_key": openai_key,
+            "credential_source": self._credential_policy_label(config),
+            "gemini_credential_source": gemini_credential_source,
+            "anthropic_credential_source": anthropic_credential_source,
+            "openai_credential_source": openai_credential_source,
             "customer_name": config.customer_name,
             "enable_platform_fallback": config.enable_platform_fallback,
         }
@@ -75,8 +116,10 @@ class SettingsService:
 
         gemini_api_key = data.pop("gemini_api_key", None)
         anthropic_api_key = data.pop("anthropic_api_key", None)
+        openai_api_key = data.pop("openai_api_key", None)
         clear_gemini_api_key = data.pop("clear_gemini_api_key", False)
         clear_anthropic_api_key = data.pop("clear_anthropic_api_key", False)
+        clear_openai_api_key = data.pop("clear_openai_api_key", False)
         changed_fields = []
 
         for field, value in data.items():
@@ -90,7 +133,7 @@ class SettingsService:
             config.gemini_key_updated_at = datetime.utcnow()
             changed_fields.append("gemini_api_key_cleared")
         elif gemini_api_key is not None:
-            config.gemini_api_key = gemini_api_key.strip()
+            config.gemini_api_key = seal_secret(gemini_api_key.strip())
             config.gemini_key_updated_at = datetime.utcnow()
             changed_fields.append("gemini_api_key_updated")
         if clear_anthropic_api_key:
@@ -98,9 +141,17 @@ class SettingsService:
             config.anthropic_key_updated_at = datetime.utcnow()
             changed_fields.append("anthropic_api_key_cleared")
         elif anthropic_api_key is not None:
-            config.anthropic_api_key = anthropic_api_key.strip()
+            config.anthropic_api_key = seal_secret(anthropic_api_key.strip())
             config.anthropic_key_updated_at = datetime.utcnow()
             changed_fields.append("anthropic_api_key_updated")
+        if clear_openai_api_key:
+            config.openai_api_key = ""
+            config.openai_key_updated_at = datetime.utcnow()
+            changed_fields.append("openai_api_key_cleared")
+        elif openai_api_key is not None:
+            config.openai_api_key = seal_secret(openai_api_key.strip())
+            config.openai_key_updated_at = datetime.utcnow()
+            changed_fields.append("openai_api_key_updated")
 
         db.add(config)
         if changed_fields:
@@ -109,7 +160,7 @@ class SettingsService:
                 area="ai_settings",
                 action="update",
                 actor=actor,
-                details=", ".join(changed_fields),
+                details=f"{', '.join(changed_fields)} | mode={config.credential_mode} | fallback={config.enable_platform_fallback}",
             )
         await db.commit()
         await db.refresh(config)
@@ -153,10 +204,59 @@ class SettingsService:
             ]
         }
 
+    async def list_operational_audit_logs(
+        self,
+        db: AsyncSession,
+        limit: int = 40,
+        area: Optional[str] = None,
+    ) -> Dict:
+        stmt = select(SettingsAuditLog)
+        if area:
+            stmt = stmt.where(SettingsAuditLog.area == area)
+        stmt = stmt.order_by(desc(SettingsAuditLog.created_at)).limit(limit)
+        result = await db.execute(stmt)
+        items = list(result.scalars().all())
+        return {
+            "items": [
+                {
+                    "id": item.id,
+                    "area": item.area,
+                    "action": item.action,
+                    "actor": item.actor,
+                    "instance_id": item.instance_id,
+                    "details": item.details,
+                    "created_at": item.created_at,
+                }
+                for item in items
+            ],
+            "total_items": len(items),
+        }
+
     def get_security_meta(self) -> Dict:
         return get_admin_runtime_meta()
 
     def _serialize(self, config: AISettings) -> Dict:
+        customer_gemini = self._read_customer_secret(config.gemini_api_key)
+        customer_anthropic = self._read_customer_secret(config.anthropic_api_key)
+        customer_openai = self._read_customer_secret(config.openai_api_key)
+        effective_gemini_key, effective_gemini_source = self._resolve_effective_secret(
+            config.credential_mode,
+            customer_gemini,
+            settings.gemini_api_key,
+            config.enable_platform_fallback,
+        )
+        effective_anthropic_key, effective_anthropic_source = self._resolve_effective_secret(
+            config.credential_mode,
+            customer_anthropic,
+            settings.anthropic_api_key,
+            config.enable_platform_fallback,
+        )
+        effective_openai_key, effective_openai_source = self._resolve_effective_secret(
+            config.credential_mode,
+            customer_openai,
+            settings.openai_api_key,
+            config.enable_platform_fallback,
+        )
         return {
             "id": config.id,
             "credential_mode": config.credential_mode,
@@ -167,12 +267,25 @@ class SettingsService:
             "fallback_model": config.fallback_model,
             "enable_platform_fallback": config.enable_platform_fallback,
             "notes": config.notes,
-            "gemini_key_configured": bool(config.gemini_api_key.strip() or settings.gemini_api_key),
-            "anthropic_key_configured": bool(config.anthropic_api_key.strip() or settings.anthropic_api_key),
-            "gemini_key_masked": _mask_secret(config.gemini_api_key.strip()),
-            "anthropic_key_masked": _mask_secret(config.anthropic_api_key.strip()),
+            "customer_gemini_key_configured": bool(customer_gemini),
+            "customer_anthropic_key_configured": bool(customer_anthropic),
+            "customer_openai_key_configured": bool(customer_openai),
+            "platform_gemini_key_configured": bool(settings.gemini_api_key),
+            "platform_anthropic_key_configured": bool(settings.anthropic_api_key),
+            "platform_openai_key_configured": bool(settings.openai_api_key),
+            "gemini_key_configured": bool(effective_gemini_key),
+            "anthropic_key_configured": bool(effective_anthropic_key),
+            "openai_key_configured": bool(effective_openai_key),
+            "gemini_key_masked": _mask_secret(customer_gemini),
+            "anthropic_key_masked": _mask_secret(customer_anthropic),
+            "openai_key_masked": _mask_secret(customer_openai),
+            "effective_gemini_credential_source": effective_gemini_source,
+            "effective_anthropic_credential_source": effective_anthropic_source,
+            "effective_openai_credential_source": effective_openai_source,
+            "credential_policy_label": self._credential_policy_label(config),
             "gemini_key_updated_at": config.gemini_key_updated_at,
             "anthropic_key_updated_at": config.anthropic_key_updated_at,
+            "openai_key_updated_at": config.openai_key_updated_at,
             "created_at": config.created_at,
             "updated_at": config.updated_at,
         }

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 import pandas as pd
@@ -25,12 +26,14 @@ from ui import (
     render_spotlight_card,
     render_stat_band,
     status_pill,
+    push_flash,
 )
 
 
 ENGINE_OPTIONS = {
-    "Gemini": {"provider": "gemini", "label": "Gemini"},
-    "claude-3-5-haiku": {"provider": "anthropic", "label": "Claude 3.5 Haiku"},
+    "Gemini": {"provider": "gemini", "model": "gemini-2.5-flash", "label": "Gemini"},
+    "ChatGPT": {"provider": "openai", "model": "gpt-4.1-mini", "label": "ChatGPT"},
+    "Claude": {"provider": "anthropic", "model": "claude-3-5-haiku-20241022", "label": "Claude 3.5 Haiku"},
     "Jarvis": {"provider": "fallback", "label": "Jarvis"},
 }
 
@@ -42,6 +45,14 @@ FEEDBACK_TYPE_OPTIONS = [
     "onboarding",
 ]
 
+PUBLIC_LINK_STATUS_LABELS = {
+    "active": "Ativo",
+    "disabled": "Desabilitado",
+    "revoked": "Revogado",
+    "expired": "Expirado",
+    "inactive": "Inativo",
+}
+
 
 def friendly_provider_name(provider: Optional[str], model: Optional[str] = None) -> str:
     normalized = (provider or "").lower()
@@ -49,11 +60,17 @@ def friendly_provider_name(provider: Optional[str], model: Optional[str] = None)
 
     if normalized == "gemini":
         return "Gemini"
+    if normalized == "openai" or "gpt" in normalized_model:
+        return "ChatGPT"
     if normalized == "anthropic" or "claude" in normalized_model:
         return "Claude 3.5 Haiku"
     if normalized in {"fallback", "static_fallback", "llm_fallback_parse_error", "empty"}:
         return "Jarvis"
     return provider or "Auto"
+
+
+def friendly_public_link_status(status: Optional[str]) -> str:
+    return PUBLIC_LINK_STATUS_LABELS.get((status or "").lower(), status or "Desconhecido")
 
 
 configure_page("Detalhe da sessao", "A")
@@ -69,7 +86,7 @@ panel_header(
 try:
     sessions = api_get("/sessions")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar as sessoes: {exc}")
+    st.error(str(exc))
     st.stop()
 
 if not sessions:
@@ -95,7 +112,7 @@ st.session_state["selected_session_id"] = selected_id
 try:
     detail = api_get(f"/sessions/{selected_id}/detail")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar o detalhe da sessao: {exc}")
+    st.error(str(exc))
     st.stop()
 
 try:
@@ -103,12 +120,25 @@ try:
 except Exception:
     analysis = None
 
+try:
+    dashboard_summary = api_get("/sessions/dashboard/summary")
+except Exception:
+    dashboard_summary = {}
+
+try:
+    operational_audit = api_get("/settings/audit")
+except Exception:
+    operational_audit = {"items": []}
+
 confirm_delete_key = f"confirm_delete_{selected_id}"
 confirm_archive_key = f"confirm_archive_{selected_id}"
+analysis_run_key = f"analysis_run_{selected_id}"
 if confirm_delete_key not in st.session_state:
     st.session_state[confirm_delete_key] = False
 if confirm_archive_key not in st.session_state:
     st.session_state[confirm_archive_key] = False
+if analysis_run_key not in st.session_state:
+    st.session_state[analysis_run_key] = False
 
 render_spotlight_card(
     "Sessao ativa",
@@ -132,22 +162,40 @@ with header_cols[0]:
         horizontal=False,
     )
 with header_cols[1]:
-    if st.button("Gerar analise", use_container_width=True):
-        with st.spinner("Processando feedbacks da sessao..."):
-            try:
-                provider = ENGINE_OPTIONS[engine]["provider"]
-                api_post(f"/sessions/{selected_id}/analyze", {"provider": provider})
-                st.success("Analise atualizada com sucesso.")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Falha ao gerar analise: {exc}")
+    if st.button(
+        "Gerar analise",
+        use_container_width=True,
+        disabled=st.session_state[analysis_run_key],
+    ):
+        st.session_state[analysis_run_key] = True
+        st.rerun()
 with header_cols[2]:
     if not st.session_state[confirm_archive_key]:
-        if st.button("Arquivar", use_container_width=True):
+        if st.button(
+            "Arquivar",
+            use_container_width=True,
+            disabled=st.session_state[analysis_run_key],
+        ):
             st.session_state[confirm_archive_key] = True
             st.rerun()
 with header_cols[3]:
     clipboard_button("Copiar link publico", detail["public_url"], f"copy-{selected_id}")
+
+if st.session_state[analysis_run_key]:
+    with st.spinner("Processando feedbacks da sessao..."):
+        try:
+            provider = ENGINE_OPTIONS[engine]["provider"]
+            model = ENGINE_OPTIONS[engine].get("model")
+            payload = {"provider": provider}
+            if model:
+                payload["model"] = model
+            api_post(f"/sessions/{selected_id}/analyze", payload)
+            push_flash("success", "Analise atualizada com sucesso.")
+        except Exception as exc:
+            push_flash("error", str(exc))
+        finally:
+            st.session_state[analysis_run_key] = False
+    st.rerun()
 
 if st.session_state[confirm_archive_key]:
     st.warning("Ao arquivar, a sessao sai da operacao ativa e vai para Sessoes Arquivadas.")
@@ -158,10 +206,10 @@ if st.session_state[confirm_archive_key]:
                 api_post(f"/sessions/{selected_id}/archive")
                 st.session_state["selected_archived_session_id"] = selected_id
                 st.session_state[confirm_archive_key] = False
-                st.success("Sessao arquivada com sucesso.")
+                push_flash("success", "Sessao arquivada com sucesso.")
                 st.switch_page("pages/4_Archived_Sessions.py")
             except Exception as exc:
-                st.error(f"Nao foi possivel arquivar a sessao: {exc}")
+                st.error(str(exc))
     with archive_cols[1]:
         if st.button("Cancelar arquivamento", use_container_width=True):
             st.session_state[confirm_archive_key] = False
@@ -208,6 +256,21 @@ overview_tab, briefing_tab, edit_tab, export_tab = st.tabs(
 
 with overview_tab:
     main_col, side_col = st.columns([1.5, 1])
+    recent_sessions = dashboard_summary.get("recent_sessions", [])
+    portfolio_sessions = [item for item in recent_sessions if item.get("id") != selected_id]
+    volume_rank = 1 + sum(1 for item in portfolio_sessions if item.get("response_count", 0) > detail["response_count"])
+    score_rank = None
+    if detail.get("avg_score") is not None:
+        score_rank = 1 + sum(
+            1
+            for item in portfolio_sessions
+            if item.get("avg_score") is not None and item.get("avg_score", 0) > detail.get("avg_score", 0)
+        )
+    session_audit_items = [
+        item
+        for item in operational_audit.get("items", [])
+        if f"session_id={selected_id}" in (item.get("details") or "")
+    ][:6]
 
     with main_col:
         render_session_card(
@@ -218,6 +281,7 @@ with overview_tab:
                 str(detail.get("score_type", "")).replace("_", " ").title(),
                 detail.get("target_audience") or "Publico nao informado",
                 f"{detail.get('max_followup_questions')} aprofundamentos",
+                f"Link {friendly_public_link_status(detail.get('public_link_status'))}",
             ],
             facts=[
                 ("Tema", detail.get("theme_summary") or "Nao informado"),
@@ -226,6 +290,8 @@ with overview_tab:
                 ("Criada", format_dt(detail.get("created_at"))),
                 ("Criado por", detail.get("created_by_admin_username") or "bootstrap"),
                 ("Ultima analise", format_dt(detail.get("last_analysis_at"))),
+                ("Status do link", friendly_public_link_status(detail.get("public_link_status"))),
+                ("Expira em", format_dt(detail.get("public_link_expires_at"))),
                 ("Link publico", detail["public_url"]),
             ],
         )
@@ -295,6 +361,38 @@ with overview_tab:
                     "value": detail.get("status", "-").title(),
                     "copy": f"Autor: {detail.get('created_by_admin_username') or 'bootstrap'}",
                 },
+                {
+                    "label": "Link publico",
+                    "value": friendly_public_link_status(detail.get("public_link_status")),
+                    "copy": format_dt(detail.get("public_link_expires_at")) or "Sem expiracao definida",
+                },
+            ],
+            compact=True,
+        )
+
+        st.markdown("### Leitura comparativa")
+        render_stat_band(
+            [
+                {
+                    "label": "Rank em volume",
+                    "value": f"#{volume_rank}",
+                    "copy": "Posicao desta sessao no recorte mais recente.",
+                },
+                {
+                    "label": "Rank em score",
+                    "value": f"#{score_rank}" if score_rank is not None else "-",
+                    "copy": "Comparativo do score medio atual.",
+                },
+                {
+                    "label": "Media do portfolio",
+                    "value": format_score(dashboard_summary.get("average_score")),
+                    "copy": "Media das sessoes com analise concluida.",
+                },
+                {
+                    "label": "Ativas no portfolio",
+                    "value": str(dashboard_summary.get("active_sessions", 0)),
+                    "copy": "Base ativa monitorada neste momento.",
+                },
             ],
             compact=True,
         )
@@ -321,6 +419,19 @@ with overview_tab:
                 "Use o botao de analise para produzir o resumo executivo e os temas principais desta sessao.",
             )
 
+        st.markdown("### Auditoria da sessao")
+        if session_audit_items:
+            for item in session_audit_items:
+                render_insight_card(
+                    f"{item.get('area', '-')} | {item.get('action', '-')}",
+                    f"{format_dt(item.get('created_at'))} | {item.get('actor', '-')} | {item.get('details') or 'Sem detalhe adicional.'}",
+                )
+        else:
+            empty_state(
+                "Sem eventos rastreados",
+                "As proximas alteracoes, analises e exportacoes desta sessao aparecerao aqui.",
+            )
+
 with briefing_tab:
     render_session_card(
         title="Briefing estruturado",
@@ -343,6 +454,16 @@ with briefing_tab:
 with edit_tab:
     st.markdown("### Editar sessao")
     st.caption("Ajuste briefing, tipo de feedback e limite de aprofundamento sem recriar a sessao.")
+    current_expiration = detail.get("public_link_expires_at")
+    expiration_enabled_default = bool(current_expiration)
+    expiration_date_default = (
+        current_expiration.date() if isinstance(current_expiration, datetime) else datetime.now().date()
+    )
+    expiration_time_default = (
+        current_expiration.time().replace(second=0, microsecond=0)
+        if isinstance(current_expiration, datetime)
+        else datetime.now().time().replace(second=0, microsecond=0)
+    )
     with st.form(f"edit_session_form_{selected_id}"):
         title = st.text_input("Titulo", value=detail.get("title") or "")
         description = st.text_area("Descricao", value=detail.get("description") or "")
@@ -365,9 +486,39 @@ with edit_tab:
             max_value=20,
             value=int(detail.get("max_followup_questions") or 3),
         )
+        st.markdown("#### Controle do link publico")
+        public_link_enabled = st.toggle(
+            "Link publico habilitado",
+            value=detail.get("public_link_enabled", True),
+            help="Quando desativado, o link deixa de aceitar novos acessos imediatamente.",
+        )
+        expiration_enabled = st.checkbox(
+            "Definir expiracao do link publico",
+            value=expiration_enabled_default,
+            help="Use quando quiser que a sessao pare de aceitar respostas automaticamente.",
+        )
+        if expiration_enabled:
+            expiration_cols = st.columns(2)
+            with expiration_cols[0]:
+                expiration_date = st.date_input("Data de expiracao", value=expiration_date_default)
+            with expiration_cols[1]:
+                expiration_time = st.time_input(
+                    "Horario de expiracao",
+                    value=expiration_time_default,
+                    step=60,
+                )
+        else:
+            expiration_date = None
+            expiration_time = None
         submitted = st.form_submit_button("Salvar alteracoes", use_container_width=True)
         if submitted:
             try:
+                public_link_expires_at = None
+                if expiration_enabled and expiration_date and expiration_time:
+                    public_link_expires_at = datetime.combine(
+                        expiration_date,
+                        expiration_time,
+                    ).isoformat()
                 api_patch(
                     f"/sessions/{selected_id}",
                     {
@@ -380,12 +531,62 @@ with edit_tab:
                         "topics_to_explore": topics_to_explore,
                         "ai_guidance": ai_guidance,
                         "max_followup_questions": max_followup_questions,
+                        "public_link_enabled": public_link_enabled,
+                        "public_link_expires_at": public_link_expires_at,
                     },
                 )
-                st.success("Sessao atualizada com sucesso.")
+                push_flash("success", "Sessao atualizada com sucesso.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Nao foi possivel atualizar a sessao: {exc}")
+                st.error(str(exc))
+
+    st.markdown("### Controle do link publico")
+    link_control_cols = st.columns(3)
+    with link_control_cols[0]:
+        if st.button("Revogar link", use_container_width=True):
+            try:
+                api_post(f"/sessions/{selected_id}/public-link/revoke")
+                push_flash("success", "Link publico revogado com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+    with link_control_cols[1]:
+        if st.button("Reativar link", use_container_width=True):
+            try:
+                api_post(f"/sessions/{selected_id}/public-link/reactivate")
+                push_flash("success", "Link publico reativado com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+    with link_control_cols[2]:
+        if st.button("Gerar novo link", use_container_width=True):
+            try:
+                api_post(f"/sessions/{selected_id}/public-link/rotate")
+                push_flash("success", "Novo link publico gerado com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+
+    render_stat_band(
+        [
+            {
+                "label": "Status do link",
+                "value": friendly_public_link_status(detail.get("public_link_status")),
+                "copy": "Controle atual de acesso publico.",
+            },
+            {
+                "label": "Expiracao",
+                "value": format_dt(detail.get("public_link_expires_at")) or "-",
+                "copy": "Vazio significa link sem prazo automatico.",
+            },
+            {
+                "label": "URL publica",
+                "value": "Disponivel" if detail.get("public_link_enabled", True) else "Bloqueada",
+                "copy": "Use revogar ou gerar novo link quando precisar cortar acesso.",
+            },
+        ],
+        compact=True,
+    )
 
     st.markdown("### Zona sensivel")
     danger_cols = st.columns([1, 2.2])
@@ -411,10 +612,10 @@ with edit_tab:
                         st.session_state["selected_session_id"] = remaining_ids[current_index] if current_index < len(remaining_ids) else remaining_ids[-1]
                     else:
                         st.session_state.pop("selected_session_id", None)
-                    st.success("Sessao excluida com sucesso.")
+                    push_flash("success", "Sessao excluida com sucesso.")
                     st.rerun()
                 except Exception as exc:
-                    st.error(f"Nao foi possivel excluir a sessao: {exc}")
+                    st.error(str(exc))
         with confirm_cols[1]:
             if st.button("Cancelar exclusao", use_container_width=True):
                 st.session_state[confirm_delete_key] = False
@@ -429,10 +630,19 @@ with export_tab:
     )
     st.code(detail["public_url"])
     export_cols = st.columns(2)
+    csv_ready_key = f"csv_export_ready_{selected_id}"
+    pdf_ready_key = f"pdf_export_ready_{selected_id}"
     with export_cols[0]:
-        try:
-            csv_bytes = api_get_bytes(f"/sessions/{selected_id}/export/csv")
-        except Exception:
+        if detail["response_count"] > 0:
+            if st.button("Preparar CSV", key=f"prepare-csv-{selected_id}", use_container_width=True):
+                try:
+                    st.session_state[csv_ready_key] = api_get_bytes(f"/sessions/{selected_id}/export/csv")
+                    push_flash("success", "CSV preparado para download.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            csv_bytes = st.session_state.get(csv_ready_key)
+        else:
             csv_bytes = None
         if csv_bytes:
             st.download_button(
@@ -445,9 +655,16 @@ with export_tab:
         else:
             empty_state("CSV indisponivel", "Sem respostas para exportar em CSV.")
     with export_cols[1]:
-        try:
-            pdf_bytes = api_get_bytes(f"/sessions/{selected_id}/export/pdf")
-        except Exception:
+        if analysis:
+            if st.button("Preparar PDF", key=f"prepare-pdf-{selected_id}", use_container_width=True):
+                try:
+                    st.session_state[pdf_ready_key] = api_get_bytes(f"/sessions/{selected_id}/export/pdf")
+                    push_flash("success", "PDF preparado para download.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+            pdf_bytes = st.session_state.get(pdf_ready_key)
+        else:
             pdf_bytes = None
         if pdf_bytes:
             st.download_button(

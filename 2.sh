@@ -44,6 +44,12 @@ scripts/ec2_install_systemd.sh
 # 13. Parar processos manuais quando terminar
 scripts/ec2_stop.sh
 
+# 14. Backup operacional da instancia
+scripts/backup.sh ec2-manual
+
+# 15. Validar restore em ambiente temporario
+scripts/backup_verify.sh data/backups/insightflow_backup_<timestamp>_ec2-manual.tar.gz
+
 # URLs esperadas no teste inicial
 # API local: http://127.0.0.1:8000
 # Admin local: http://127.0.0.1:8501/admin

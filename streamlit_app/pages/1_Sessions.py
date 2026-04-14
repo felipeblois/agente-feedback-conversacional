@@ -5,6 +5,7 @@ from ui import (
     PUBLIC_BASE_URL,
     api_get,
     api_post,
+    clipboard_button,
     configure_page,
     empty_state,
     ensure_admin_access,
@@ -17,6 +18,7 @@ from ui import (
     render_spotlight_card,
     render_stat_band,
     status_pill,
+    push_flash,
 )
 
 
@@ -50,15 +52,15 @@ ensure_admin_access()
 render_sidebar("sessions")
 
 panel_header(
-    "Workspace",
-    "Sessoes de feedback",
-    "Crie, filtre, ajuste o briefing e acompanhe a operacao sem sair do painel.",
+    "InsightFlow",
+    "Rodadas de feedback",
+    "Crie, filtre, ajuste o briefing e acompanhe a operacao executiva sem sair do painel.",
 )
 
 try:
     sessions = api_get("/sessions")
 except Exception as exc:
-    st.error(f"Erro ao conectar com a API: {exc}")
+    st.error(str(exc))
     sessions = []
 
 filter_cols = st.columns([1.6, 1, 0.9])
@@ -121,7 +123,7 @@ render_stat_band(
 list_col, form_col = st.columns([1.55, 1])
 
 with list_col:
-    st.markdown("### Lista operacional")
+    st.markdown("### Carteira ativa")
     if not sessions:
         empty_state(
             "Nenhuma sessao cadastrada",
@@ -169,26 +171,30 @@ with list_col:
                     ("Criado por", session.get("created_by_admin_username") or "bootstrap"),
                 ],
             )
-            action_cols = st.columns([1.05, 1.25, 1])
+            action_cols = st.columns([1.05, 1.15, 1.1, 1])
             with action_cols[0]:
                 if st.button("Abrir detalhe", key=f"detail-{session['id']}", use_container_width=True):
                     st.session_state["selected_session_id"] = session["id"]
+                    push_flash("info", "Detalhe da sessao aberto para continuidade da operacao.")
                     st.switch_page("pages/2_Session_Detail.py")
             with action_cols[1]:
-                st.code(f"{PUBLIC_BASE_URL}/f/{session['public_token']}")
+                public_url = f"{PUBLIC_BASE_URL}/f/{session['public_token']}"
+                st.caption(public_url)
             with action_cols[2]:
+                clipboard_button("Copiar link", f"{PUBLIC_BASE_URL}/f/{session['public_token']}", f"copy-list-{session['id']}")
+            with action_cols[3]:
                 if st.button("Arquivar", key=f"archive-{session['id']}", use_container_width=True):
                     try:
                         api_post(f"/sessions/{session['id']}/archive")
                         st.session_state["selected_archived_session_id"] = session["id"]
-                        st.success("Sessao arquivada com sucesso.")
+                        push_flash("success", "Sessao arquivada com sucesso.")
                         st.rerun()
                     except Exception as exc:
-                        st.error(f"Nao foi possivel arquivar: {exc}")
+                        st.error(str(exc))
 
 with form_col:
-    st.markdown("### Criar sessao")
-    st.caption("Crie uma nova coleta com briefing estruturado para a IA.")
+    st.markdown("### Nova rodada")
+    st.caption("Abra uma nova rodada de feedback com briefing estruturado para a IA.")
     with st.form("new_session_form", clear_on_submit=True):
         title = st.text_input("Titulo")
         desc = st.text_area("Descricao")
@@ -235,7 +241,7 @@ with form_col:
                         },
                     )
                     st.session_state["selected_session_id"] = created["id"]
-                    st.success("Sessao criada com sucesso.")
-                    st.rerun()
+                    push_flash("success", "Sessao criada com sucesso.")
+                    st.switch_page("pages/2_Session_Detail.py")
                 except Exception as exc:
-                    st.error(f"Erro ao criar sessao: {exc}")
+                    st.error(str(exc))

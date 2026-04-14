@@ -6,6 +6,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENV_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
 RUN_DIR="${PROJECT_ROOT}/data/run"
 LOG_DIR="${PROJECT_ROOT}/data/logs"
+BACKUP_DIR="${PROJECT_ROOT}/data/backups"
 
 ensure_linux() {
     if [[ -z "${BASH_VERSION:-}" ]]; then
@@ -16,7 +17,7 @@ ensure_linux() {
 
 ensure_project_root() {
     cd "${PROJECT_ROOT}"
-    mkdir -p "${RUN_DIR}" "${LOG_DIR}"
+    mkdir -p "${RUN_DIR}" "${LOG_DIR}" "${BACKUP_DIR}"
 }
 
 ensure_venv() {
@@ -31,6 +32,40 @@ run_python_module() {
     local module="$1"
     shift
     "${VENV_PYTHON}" -m "${module}" "$@"
+}
+
+resolve_database_url() {
+    local database_url="${DATABASE_URL:-}"
+
+    if [[ -z "${database_url}" && -f "${PROJECT_ROOT}/.env" ]]; then
+        database_url="$(grep -E '^DATABASE_URL=' "${PROJECT_ROOT}/.env" | tail -n 1 | cut -d= -f2- || true)"
+    fi
+
+    echo "${database_url:-sqlite+aiosqlite:///./data/feedback_agent.db}"
+}
+
+resolve_sqlite_db_path() {
+    local database_url
+    database_url="$(resolve_database_url)"
+
+    if [[ "${database_url}" != sqlite* ]]; then
+        return 1
+    fi
+
+    local db_path="${database_url#sqlite+aiosqlite:///}"
+    db_path="${db_path#sqlite:///}"
+
+    if [[ "${db_path}" == ./* ]]; then
+        db_path="${PROJECT_ROOT}/${db_path#./}"
+    elif [[ "${db_path}" != /* ]]; then
+        db_path="${PROJECT_ROOT}/${db_path}"
+    fi
+
+    echo "${db_path}"
+}
+
+timestamp_utc() {
+    date -u +"%Y%m%d_%H%M%S"
 }
 
 ensure_database_schema() {

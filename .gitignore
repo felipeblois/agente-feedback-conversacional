@@ -23,6 +23,9 @@ data/*.db-wal
 
 # Logs
 data/logs/
+data/run/
+data/exports/*.pdf
+data/backups/*.tar.gz
 
 # IDE
 .vscode/

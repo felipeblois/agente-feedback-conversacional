@@ -45,6 +45,9 @@ async def test_session_detail_and_dashboard_contract(async_client: AsyncClient):
         assert "total_sessions" in dashboard
         assert "archived_sessions" in dashboard
         assert "recent_sessions" in dashboard
+        assert "average_score" in dashboard
+        assert "sessions_with_analysis" in dashboard
+        assert "executive_highlights" in dashboard
         assert any(item["id"] == session_id for item in dashboard["recent_sessions"])
     finally:
         await async_client.delete(f"/api/v1/sessions/{session_id}")

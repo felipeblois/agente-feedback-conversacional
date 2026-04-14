@@ -15,6 +15,8 @@ class SessionBase(BaseModel):
     ai_guidance: Optional[str] = None
     is_anonymous: bool = True
     max_followup_questions: int = 3
+    public_link_enabled: bool = True
+    public_link_expires_at: Optional[datetime] = None
     status: str = "active"
 
 
@@ -33,6 +35,8 @@ class SessionUpdate(BaseModel):
     ai_guidance: Optional[str] = None
     is_anonymous: Optional[bool] = None
     max_followup_questions: Optional[int] = None
+    public_link_enabled: Optional[bool] = None
+    public_link_expires_at: Optional[datetime] = None
     status: Optional[str] = None
 
 
@@ -60,11 +64,17 @@ class DashboardSummaryResponse(BaseModel):
     total_sessions: int
     total_responses: int
     average_completion_rate: float
+    average_score: Optional[float] = None
     analyses_completed: int
     last_analysis_at: Optional[datetime] = None
     active_sessions: int
     archived_sessions: int
     completed_responses: int
+    sessions_with_analysis: int
+    completion_leader_title: Optional[str] = None
+    response_leader_title: Optional[str] = None
+    score_leader_title: Optional[str] = None
+    executive_highlights: List[str] = []
     recent_sessions: List[SessionListResponse]
 
 
@@ -86,5 +96,6 @@ class RecentResponseItem(BaseModel):
 class SessionDetailResponse(SessionListResponse):
     latest_analysis_summary: Optional[str] = None
     public_url: str
+    public_link_status: str
     score_distribution: List[ScoreDistributionItem]
     recent_responses: List[RecentResponseItem]

@@ -9,7 +9,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from app.core.config import get_settings
-from app.core.security import get_admin_api_token, get_admin_runtime_meta, parse_admin_auth_header
+from app.core.security import get_admin_api_token, get_admin_runtime_meta
 
 settings = get_settings()
 
@@ -21,6 +21,35 @@ AUTH_TOKEN_KEY = "admin_api_token"
 AUTH_ACTOR_KEY = "admin_actor"
 AUTH_STORAGE_ACTION_KEY = "admin_storage_action"
 AUTH_QUERY_PARAM = "admin_session"
+FLASH_MESSAGES_KEY = "ui_flash_messages"
+
+
+def push_flash(level: str, message: str) -> None:
+    queue = st.session_state.setdefault(FLASH_MESSAGES_KEY, [])
+    queue.append({"level": level, "message": message})
+
+
+def render_flash_messages() -> None:
+    messages = st.session_state.pop(FLASH_MESSAGES_KEY, [])
+    for item in messages:
+        level = item.get("level", "info")
+        message = item.get("message", "")
+        if level == "success":
+            st.success(message)
+        elif level == "warning":
+            st.warning(message)
+        elif level == "error":
+            st.error(message)
+        else:
+            st.info(message)
+
+
+def clear_admin_session() -> None:
+    st.session_state.pop(AUTH_STATE_KEY, None)
+    st.session_state.pop(AUTH_TOKEN_KEY, None)
+    st.session_state.pop(AUTH_ACTOR_KEY, None)
+    st.session_state[AUTH_STORAGE_ACTION_KEY] = "clear"
+    st.query_params.clear()
 
 
 def _render_auth_storage_bridge(action: str = "restore", token: str = "", actor: str = "") -> None:
@@ -68,16 +97,22 @@ def _hydrate_admin_session_from_query() -> bool:
     if not token:
         return False
 
-    parsed = parse_admin_auth_header(token)
-    if not parsed:
-        st.query_params.clear()
-        st.session_state[AUTH_STORAGE_ACTION_KEY] = "clear"
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            response = client.get(
+                f"{API_BASE}/settings/admin/session",
+                headers={"X-Admin-Token": token},
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        clear_admin_session()
+        push_flash("warning", "Sua sessao do admin expirou. Entre novamente para continuar.")
         return False
 
-    actor, _source = parsed
     st.session_state[AUTH_STATE_KEY] = True
     st.session_state[AUTH_TOKEN_KEY] = token
-    st.session_state[AUTH_ACTOR_KEY] = actor
+    st.session_state[AUTH_ACTOR_KEY] = payload.get("actor", "admin")
     st.session_state[AUTH_STORAGE_ACTION_KEY] = "save"
     return True
 
@@ -97,10 +132,14 @@ def _sync_auth_storage_if_needed() -> None:
 def configure_page(title: str, icon: str) -> None:
     st.set_page_config(page_title=title, page_icon=icon, layout="wide")
     inject_theme()
+    render_flash_messages()
 
 
 def ensure_admin_access() -> None:
     if st.session_state.get(AUTH_STATE_KEY):
+        token = st.session_state.get(AUTH_TOKEN_KEY, "")
+        if token and st.query_params.get(AUTH_QUERY_PARAM) != token:
+            st.query_params[AUTH_QUERY_PARAM] = token
         _sync_auth_storage_if_needed()
         return
 
@@ -178,15 +217,15 @@ def ensure_admin_access() -> None:
                 elif exc.response.status_code == 503:
                     st.warning("A API configurada esta temporariamente indisponivel. Aguarde alguns segundos e tente novamente.")
                 else:
-                    st.error(f"Nao foi possivel autenticar agora. API respondeu com status {exc.response.status_code}.")
+                    st.error("Nao foi possivel validar o acesso agora. Tente novamente em instantes.")
             except httpx.TimeoutException:
                 st.warning(
-                    "A API configurada demorou para responder. Verifique a URL da instancia ativa e tente novamente em alguns segundos."
+                    "A API demorou para responder. Verifique se a instancia esta ativa e tente novamente em alguns segundos."
                 )
             except httpx.RequestError:
-                st.error(f"Nao foi possivel conectar na API configurada em {API_BASE}.")
-            except Exception as exc:
-                st.error(f"Falha inesperada ao autenticar: {exc.__class__.__name__}")
+                st.error("Nao foi possivel conectar ao backend configurado para o painel.")
+            except Exception:
+                st.error("O login nao pode ser concluido agora. Tente novamente em instantes.")
 
     if meta.get("uses_default_password"):
         st.warning(
@@ -197,11 +236,18 @@ def ensure_admin_access() -> None:
 
 def render_logout_control() -> None:
     if st.sidebar.button("Sair", key="logout-admin", use_container_width=True):
-        st.session_state.pop(AUTH_STATE_KEY, None)
-        st.session_state.pop(AUTH_TOKEN_KEY, None)
-        st.session_state.pop(AUTH_ACTOR_KEY, None)
-        st.session_state[AUTH_STORAGE_ACTION_KEY] = "clear"
-        st.query_params.clear()
+        token = st.session_state.get(AUTH_TOKEN_KEY)
+        if token:
+            try:
+                with httpx.Client(timeout=20.0) as client:
+                    client.post(
+                        f"{API_BASE}/settings/admin/logout",
+                        headers={"X-Admin-Token": token},
+                    )
+            except Exception:
+                pass
+        clear_admin_session()
+        push_flash("info", "Sua sessao administrativa foi encerrada.")
         st.rerun()
 
 
@@ -788,7 +834,7 @@ def render_sidebar(current_page: str) -> None:
     nav_items = [
         ("dashboard", "Dashboard", "[D]", "Home.py"),
         ("sessions", "Sessoes", "[S]", "pages/1_Sessions.py"),
-        ("detail", "Analises", "[A]", "pages/2_Session_Detail.py"),
+        ("detail", "Detalhe", "[A]", "pages/2_Session_Detail.py"),
         ("archived", "Arquivadas", "[R]", "pages/4_Archived_Sessions.py"),
         ("settings", "Configuracoes", "[C]", "pages/3_Settings.py"),
     ]
@@ -901,46 +947,93 @@ def format_dt(value: Optional[str | datetime]) -> str:
     return value.strftime("%d/%m %H:%M")
 
 
+def explain_api_exception(exc: Exception, default_message: str = "Nao foi possivel concluir esta acao agora.") -> str:
+    if isinstance(exc, httpx.TimeoutException):
+        return "A API demorou para responder. Tente novamente em alguns segundos."
+    if isinstance(exc, httpx.RequestError):
+        return "Nao foi possivel conectar ao backend configurado para o painel."
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        if status_code in {401, 403}:
+            return "Sua sessao administrativa expirou. Entre novamente para continuar."
+        if status_code == 404:
+            return "O recurso solicitado nao esta mais disponivel."
+        if status_code == 409:
+            return "Essa acao entrou em conflito com o estado atual. Atualize a tela e tente novamente."
+        if status_code == 422:
+            return "Alguns dados enviados nao passaram na validacao. Revise os campos e tente novamente."
+        if status_code == 429:
+            return "Muitas tentativas em sequencia. Aguarde alguns segundos e tente novamente."
+        if status_code >= 500:
+            return "O backend encontrou uma falha temporaria ao processar a acao."
+    return default_message
+
+
+def _handle_api_exception(exc: Exception, default_message: str) -> None:
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in {401, 403}:
+        clear_admin_session()
+        push_flash("warning", "Sua sessao do admin expirou. Entre novamente para continuar.")
+    raise RuntimeError(explain_api_exception(exc, default_message)) from exc
+
+
 def api_get(path: str) -> Any:
-    with httpx.Client(timeout=30.0) as client:
-        response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
-        response.raise_for_status()
-        return response.json()
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
+            response.raise_for_status()
+            return response.json()
+    except Exception as exc:
+        _handle_api_exception(exc, "Nao foi possivel carregar os dados solicitados.")
 
 
 def api_post(path: str, payload: Optional[Dict[str, Any]] = None) -> Any:
-    with httpx.Client(timeout=60.0) as client:
-        response = client.post(f"{API_BASE}{path}", json=payload or {}, headers=_admin_headers())
-        response.raise_for_status()
-        return response.json()
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.post(f"{API_BASE}{path}", json=payload or {}, headers=_admin_headers())
+            response.raise_for_status()
+            return response.json()
+    except Exception as exc:
+        _handle_api_exception(exc, "Nao foi possivel executar esta acao.")
 
 
 def api_put(path: str, payload: Dict[str, Any]) -> Any:
-    with httpx.Client(timeout=60.0) as client:
-        response = client.put(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
-        response.raise_for_status()
-        return response.json()
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.put(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
+            response.raise_for_status()
+            return response.json()
+    except Exception as exc:
+        _handle_api_exception(exc, "Nao foi possivel salvar as alteracoes.")
 
 
 def api_patch(path: str, payload: Dict[str, Any]) -> Any:
-    with httpx.Client(timeout=60.0) as client:
-        response = client.patch(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
-        response.raise_for_status()
-        return response.json()
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.patch(f"{API_BASE}{path}", json=payload, headers=_admin_headers())
+            response.raise_for_status()
+            return response.json()
+    except Exception as exc:
+        _handle_api_exception(exc, "Nao foi possivel atualizar os dados.")
 
 
 def api_delete(path: str) -> Any:
-    with httpx.Client(timeout=30.0) as client:
-        response = client.delete(f"{API_BASE}{path}", headers=_admin_headers())
-        response.raise_for_status()
-        return response.json() if response.content else None
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.delete(f"{API_BASE}{path}", headers=_admin_headers())
+            response.raise_for_status()
+            return response.json() if response.content else None
+    except Exception as exc:
+        _handle_api_exception(exc, "Nao foi possivel remover este item.")
 
 
 def api_get_bytes(path: str) -> bytes:
-    with httpx.Client(timeout=60.0) as client:
-        response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
-        response.raise_for_status()
-        return response.content
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            response = client.get(f"{API_BASE}{path}", headers=_admin_headers())
+            response.raise_for_status()
+            return response.content
+    except Exception as exc:
+        _handle_api_exception(exc, "Nao foi possivel preparar o arquivo para download.")
 
 
 def clipboard_button(label: str, value: str, key: str) -> None:

@@ -33,7 +33,7 @@ def friendly_error(message: str) -> str:
 def render_friendly_error(exc: Exception) -> None:
     st.error(friendly_error(str(exc)))
     with st.expander("Detalhe tecnico", expanded=False):
-        st.caption(str(exc))
+        st.caption(f"{exc.__class__.__name__}: detalhe sensivel ocultado")
 
 
 configure_page("Configuracoes", "C")
@@ -42,14 +42,15 @@ render_sidebar("settings")
 
 panel_header(
     "Configuracoes",
-    "Credenciais de IA e admins",
-    "Gerencie seguranca, credenciais da instancia e usuarios administrativos nominais.",
+    "Governanca da instancia InsightFlow",
+    "Gerencie seguranca, credenciais, admins nominais e rastreabilidade operacional.",
 )
 
 try:
     config = api_get("/settings/ai")
     security_meta = api_get("/settings/admin/meta")
     audit_logs = api_get("/settings/ai/audit")
+    operational_audit = api_get("/settings/audit")
     admin_users = api_get("/settings/admin/users")
 except Exception as exc:
     render_friendly_error(exc)
@@ -58,6 +59,18 @@ except Exception as exc:
 mode_options = {
     "platform": "Usar credenciais da plataforma",
     "customer": "Usar credenciais do cliente",
+}
+
+provider_options = {
+    "gemini": "Gemini",
+    "openai": "OpenAI",
+    "anthropic": "Claude",
+}
+
+provider_models = {
+    "gemini": ["gemini-2.5-flash"],
+    "openai": ["gpt-4.1-mini"],
+    "anthropic": ["claude-3-5-haiku-20241022"],
 }
 
 col_form, col_test = st.columns([1.45, 1])
@@ -72,11 +85,39 @@ with col_form:
             format_func=lambda key: mode_options[key],
         )
         customer_name = st.text_input("Nome do cliente", value=config.get("customer_name", ""))
+        default_provider = st.selectbox(
+            "Motor principal",
+            options=list(provider_options.keys()),
+            index=list(provider_options.keys()).index(config.get("default_provider", "gemini")),
+            format_func=lambda key: provider_options[key],
+        )
+        default_model = st.selectbox(
+            "Modelo principal",
+            options=provider_models[default_provider],
+            index=0,
+        )
+        fallback_provider = st.selectbox(
+            "Motor de fallback",
+            options=list(provider_options.keys()),
+            index=list(provider_options.keys()).index(config.get("fallback_provider", "anthropic")),
+            format_func=lambda key: provider_options[key],
+        )
+        fallback_model = st.selectbox(
+            "Modelo de fallback",
+            options=provider_models[fallback_provider],
+            index=0,
+        )
         gemini_api_key = st.text_input(
             "Gemini API Key",
             value="",
             type="password",
             placeholder=config.get("gemini_key_masked") or "Nenhuma chave salva",
+        )
+        openai_api_key = st.text_input(
+            "OpenAI API Key",
+            value="",
+            type="password",
+            placeholder=config.get("openai_key_masked") or "Nenhuma chave salva",
         )
         anthropic_api_key = st.text_input(
             "Anthropic API Key",
@@ -85,8 +126,13 @@ with col_form:
             placeholder=config.get("anthropic_key_masked") or "Nenhuma chave salva",
         )
         clear_gemini = st.checkbox("Remover chave Gemini salva")
+        clear_openai = st.checkbox("Remover chave OpenAI salva")
         clear_anthropic = st.checkbox("Remover chave Anthropic salva")
         notes = st.text_area("Observacoes", value=config.get("notes", ""))
+        platform_fallback = st.checkbox(
+            "Permitir fallback para credenciais da plataforma quando faltar chave do cliente",
+            value=config.get("enable_platform_fallback", True),
+        )
 
         submitted = st.form_submit_button("Salvar configuracoes", use_container_width=True)
         if submitted:
@@ -94,15 +140,17 @@ with col_form:
                 payload = {
                     "credential_mode": mode,
                     "customer_name": customer_name,
-                    "default_provider": "gemini",
-                    "default_model": "gemini-2.5-flash",
-                    "fallback_provider": "anthropic",
-                    "fallback_model": "claude-3-5-haiku-20241022",
-                    "enable_platform_fallback": True,
+                    "default_provider": default_provider,
+                    "default_model": default_model,
+                    "fallback_provider": fallback_provider,
+                    "fallback_model": fallback_model,
+                    "enable_platform_fallback": platform_fallback,
                     "notes": notes,
                     "gemini_api_key": gemini_api_key if gemini_api_key else None,
+                    "openai_api_key": openai_api_key if openai_api_key else None,
                     "anthropic_api_key": anthropic_api_key if anthropic_api_key else None,
                     "clear_gemini_api_key": clear_gemini,
+                    "clear_openai_api_key": clear_openai,
                     "clear_anthropic_api_key": clear_anthropic,
                 }
                 api_put("/settings/ai", payload)
@@ -115,8 +163,27 @@ with col_test:
     st.markdown("### Estado atual")
     st.info(
         f"Modo: {mode_options.get(config['credential_mode'], config['credential_mode'])}\n\n"
+        f"Principal: {provider_options.get(config['default_provider'], config['default_provider'])}\n\n"
+        f"Fallback: {provider_options.get(config['fallback_provider'], config['fallback_provider'])}\n\n"
+        f"Politica: {config.get('credential_policy_label', '-')}\n\n"
         f"Gemini configurado: {'Sim' if config['gemini_key_configured'] else 'Nao'}\n\n"
+        f"OpenAI configurado: {'Sim' if config['openai_key_configured'] else 'Nao'}\n\n"
         f"Anthropic configurado: {'Sim' if config['anthropic_key_configured'] else 'Nao'}"
+    )
+    st.caption(
+        f"Gemini efetivo: {config.get('effective_gemini_credential_source', '-')} | "
+        f"OpenAI efetivo: {config.get('effective_openai_credential_source', '-')} | "
+        f"Anthropic efetivo: {config.get('effective_anthropic_credential_source', '-')}"
+    )
+    st.caption(
+        f"Cliente Gemini: {'Sim' if config.get('customer_gemini_key_configured') else 'Nao'} | "
+        f"Cliente OpenAI: {'Sim' if config.get('customer_openai_key_configured') else 'Nao'} | "
+        f"Cliente Anthropic: {'Sim' if config.get('customer_anthropic_key_configured') else 'Nao'}"
+    )
+    st.caption(
+        f"Plataforma Gemini: {'Sim' if config.get('platform_gemini_key_configured') else 'Nao'} | "
+        f"Plataforma OpenAI: {'Sim' if config.get('platform_openai_key_configured') else 'Nao'} | "
+        f"Plataforma Anthropic: {'Sim' if config.get('platform_anthropic_key_configured') else 'Nao'}"
     )
     st.caption(
         f"Instancia: {security_meta['instance_name']} ({security_meta['instance_id']}) | "
@@ -124,9 +191,10 @@ with col_test:
     )
     st.caption(
         f"Ultima rotacao Gemini: {format_dt(config.get('gemini_key_updated_at'))} | "
+        f"OpenAI: {format_dt(config.get('openai_key_updated_at'))} | "
         f"Anthropic: {format_dt(config.get('anthropic_key_updated_at'))}"
     )
-    st.caption("As chaves ficam mascaradas e a tela evita expor detalhes sensiveis desnecessarios.")
+    st.caption("As chaves do cliente ficam mascaradas no painel e o runtime evita expor segredos em respostas e logs.")
     if security_meta.get("uses_default_password"):
         st.warning("O bootstrap ainda usa uma senha simples. Ajuste ADMIN_PASSWORD no .env antes do uso com cliente.")
 
@@ -134,6 +202,16 @@ with col_test:
     if st.button("Testar Gemini", use_container_width=True):
         try:
             result = api_post("/settings/ai/test", {"provider": "gemini", "model": "gemini-2.5-flash"})
+            st.success(result["message"]) if result["success"] else st.warning(result["message"])
+        except Exception as exc:
+            render_friendly_error(exc)
+
+    if st.button("Testar OpenAI", use_container_width=True):
+        try:
+            result = api_post(
+                "/settings/ai/test",
+                {"provider": "openai", "model": "gpt-4.1-mini"},
+            )
             st.success(result["message"]) if result["success"] else st.warning(result["message"])
         except Exception as exc:
             render_friendly_error(exc)
@@ -154,6 +232,16 @@ with col_test:
             st.markdown(f"- `{format_dt(item['created_at'])}` | `{item['actor']}` | `{item['details']}`")
     else:
         st.caption("Nenhuma alteracao auditada ainda.")
+
+    st.markdown("### Atividade operacional")
+    if operational_audit.get("items"):
+        for item in operational_audit["items"][:10]:
+            st.markdown(
+                f"- `{format_dt(item['created_at'])}` | `{item['area']}` | `{item['action']}` | `{item['actor']}`"
+            )
+            st.caption(item["details"])
+    else:
+        st.caption("Nenhuma atividade operacional registrada ainda.")
 
 st.markdown("### Usuarios admin")
 admin_col, list_col = st.columns([1.05, 1.55])

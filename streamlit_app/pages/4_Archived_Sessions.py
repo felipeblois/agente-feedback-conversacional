@@ -16,9 +16,9 @@ from ui import (
     render_kpi_card,
     render_session_card,
     render_sidebar,
-    render_spotlight_card,
     render_stat_band,
     status_pill,
+    push_flash,
 )
 
 
@@ -37,15 +37,15 @@ ensure_admin_access()
 render_sidebar("archived")
 
 panel_header(
-    "Arquivo",
-    "Sessoes arquivadas",
-    "Consulte o historico da operacao, revise insights gerados e reative uma sessao quando precisar.",
+    "InsightFlow",
+    "Historico arquivado",
+    "Consulte o historico operacional, revise insights gerados e reative uma sessao quando precisar.",
 )
 
 try:
     archived_sessions = api_get("/sessions?status=archived")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar as sessoes arquivadas: {exc}")
+    st.error(str(exc))
     st.stop()
 
 if not archived_sessions:
@@ -87,44 +87,6 @@ if not filtered_archived:
     )
     st.stop()
 
-lead_session = filtered_archived[0]
-render_spotlight_card(
-    "Arquivo operacional",
-    lead_session["title"],
-    lead_session.get("description") or "Sessao arquivada pronta para consulta e eventual reativacao.",
-    [
-        str(lead_session.get("score_type", "")).replace("_", " ").title(),
-        f"{lead_session['response_count']} respostas",
-        f"{format_pct(lead_session['completion_rate'])} de conclusao",
-        lead_session.get("target_audience") or "Publico nao informado",
-    ],
-)
-
-render_stat_band(
-    [
-        {
-            "label": "Arquivadas",
-            "value": str(len(archived_sessions)),
-            "copy": "Sessoes preservadas no historico.",
-        },
-        {
-            "label": "Filtradas",
-            "value": str(len(filtered_archived)),
-            "copy": "Resultado atual da busca.",
-        },
-        {
-            "label": "Respostas",
-            "value": str(sum(item["response_count"] for item in filtered_archived)),
-            "copy": "Volume total das sessoes visiveis.",
-        },
-        {
-            "label": "Analises",
-            "value": str(sum(item["analysis_count"] for item in filtered_archived)),
-            "copy": "Leituras concluidas no historico.",
-        },
-    ]
-)
-
 archived_ids = [session["id"] for session in filtered_archived]
 default_archived_id = st.session_state.get("selected_archived_session_id", archived_ids[0])
 if default_archived_id not in archived_ids:
@@ -141,7 +103,7 @@ st.session_state["selected_archived_session_id"] = selected_id
 try:
     detail = api_get(f"/sessions/{selected_id}/detail")
 except Exception as exc:
-    st.error(f"Nao foi possivel carregar o detalhe da sessao arquivada: {exc}")
+    st.error(str(exc))
     st.stop()
 
 try:
@@ -159,7 +121,9 @@ with kpi_cols[2]:
 with kpi_cols[3]:
     render_kpi_card("AVG", "Score medio", format_score(detail.get("avg_score")), "Media registrada", "purple")
 
-header_cols = st.columns([3.3, 1.2])
+st.markdown("<div style='height: 0.85rem;'></div>", unsafe_allow_html=True)
+
+header_cols = st.columns([4.1, 1.35], gap="small")
 with header_cols[0]:
     render_session_card(
         title=detail["title"],
@@ -185,10 +149,10 @@ with header_cols[1]:
             api_post(f"/sessions/{selected_id}/reactivate")
             st.session_state["selected_session_id"] = selected_id
             st.session_state.pop("selected_archived_session_id", None)
-            st.success("Sessao reativada com sucesso.")
+            push_flash("success", "Sessao reativada com sucesso.")
             st.switch_page("pages/2_Session_Detail.py")
         except Exception as exc:
-            st.error(f"Nao foi possivel reativar a sessao: {exc}")
+            st.error(str(exc))
 
 main_col, side_col = st.columns([1.55, 1])
 

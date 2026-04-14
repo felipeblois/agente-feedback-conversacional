@@ -14,6 +14,14 @@ class AdminLoginResponse(BaseModel):
     token: str
     actor: str
     source: str
+    expires_at: datetime
+
+
+class AdminSessionResponse(BaseModel):
+    authenticated: bool
+    actor: str
+    source: str
+    expires_at: datetime
 
 
 class AdminUserCreateRequest(BaseModel):
