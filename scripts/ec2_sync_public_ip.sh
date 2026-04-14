@@ -34,6 +34,28 @@ log() {
     fi
 }
 
+read_env_value() {
+    local key="$1"
+    python3 - "${ENV_FILE}" "${key}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+env_path = Path(sys.argv[1])
+key = sys.argv[2]
+
+if not env_path.exists():
+    raise SystemExit(0)
+
+content = env_path.read_text(encoding="utf-8")
+match = re.search(rf"^{re.escape(key)}=(.*)$", content, re.MULTILINE)
+if not match:
+    raise SystemExit(0)
+
+print(match.group(1).strip())
+PY
+}
+
 METADATA_TOKEN="$(curl -sS -m 5 -X PUT "${METADATA_BASE}/api/token" \
     -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")"
 
@@ -50,10 +72,38 @@ if [[ -z "${PUBLIC_IP}" ]]; then
     exit 1
 fi
 
-API_URL="http://${PUBLIC_IP}"
-ADMIN_URL="http://${PUBLIC_IP}/admin"
-PUBLIC_URL="http://${PUBLIC_IP}"
-CORS_URL="http://${PUBLIC_IP}"
+PREFERRED_HOST="$(read_env_value "EC2_PUBLIC_HOSTNAME")"
+PREFERRED_SCHEME="$(read_env_value "EC2_PUBLIC_SCHEME")"
+ADMIN_PATH="$(read_env_value "EC2_ADMIN_BASE_PATH")"
+
+if [[ -z "${PREFERRED_SCHEME}" ]]; then
+    if [[ -n "${PREFERRED_HOST}" ]]; then
+        PREFERRED_SCHEME="https"
+    else
+        PREFERRED_SCHEME="http"
+    fi
+fi
+
+if [[ -z "${ADMIN_PATH}" ]]; then
+    ADMIN_PATH="/admin"
+fi
+
+if [[ "${ADMIN_PATH}" != /* ]]; then
+    ADMIN_PATH="/${ADMIN_PATH}"
+fi
+
+if [[ -n "${PREFERRED_HOST}" ]]; then
+    BASE_HOST="${PREFERRED_HOST}"
+    log "Hostname preferencial detectado no .env: ${PREFERRED_HOST}"
+else
+    BASE_HOST="${PUBLIC_IP}"
+    log "Sem hostname preferencial. Usando IP publico da EC2."
+fi
+
+API_URL="${PREFERRED_SCHEME}://${BASE_HOST}"
+ADMIN_URL="${PREFERRED_SCHEME}://${BASE_HOST}${ADMIN_PATH}"
+PUBLIC_URL="${PREFERRED_SCHEME}://${BASE_HOST}"
+CORS_URL="${PREFERRED_SCHEME}://${BASE_HOST}"
 
 python3 - "${ENV_FILE}" "${API_URL}" "${ADMIN_URL}" "${PUBLIC_URL}" "${CORS_URL}" <<'PY'
 import re

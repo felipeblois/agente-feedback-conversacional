@@ -33,6 +33,11 @@ scripts/ec2_logs.sh
 # 11. Sincronizar IP publico da EC2 no .env
 scripts/ec2_sync_public_ip.sh
 
+# Se for usar hostname/HTTPS, adicione no .env antes:
+# EC2_PUBLIC_HOSTNAME=insightflow.ddns.net
+# EC2_PUBLIC_SCHEME=https
+# EC2_ADMIN_BASE_PATH=/admin
+
 # 12. Instalar servicos permanentes
 scripts/ec2_install_systemd.sh
 

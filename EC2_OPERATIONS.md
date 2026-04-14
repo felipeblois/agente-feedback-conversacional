@@ -39,6 +39,16 @@ scripts/ec2_sync_public_ip.sh --restart
 
 Os servicos `systemd` do projeto tambem executam essa sincronizacao automaticamente antes de subir API e admin.
 
+Se voce estiver usando hostname e HTTPS, configure antes no `.env`:
+
+```bash
+EC2_PUBLIC_HOSTNAME=insightflow.ddns.net
+EC2_PUBLIC_SCHEME=https
+EC2_ADMIN_BASE_PATH=/admin
+```
+
+Assim a sincronizacao continua atualizando a instancia, mas preserva as URLs publicas apontando para o hostname em vez de voltar para o IP bruto.
+
 ## Transformar em servico permanente
 
 ```bash
