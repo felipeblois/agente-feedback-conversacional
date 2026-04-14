@@ -9,7 +9,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from app.core.config import get_settings
-from app.core.security import get_admin_api_token, get_admin_runtime_meta, parse_admin_auth_header
+from app.core.security import get_admin_api_token, get_admin_runtime_meta
 
 settings = get_settings()
 
@@ -68,16 +68,22 @@ def _hydrate_admin_session_from_query() -> bool:
     if not token:
         return False
 
-    parsed = parse_admin_auth_header(token)
-    if not parsed:
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            response = client.get(
+                f"{API_BASE}/settings/admin/session",
+                headers={"X-Admin-Token": token},
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
         st.query_params.clear()
         st.session_state[AUTH_STORAGE_ACTION_KEY] = "clear"
         return False
 
-    actor, _source = parsed
     st.session_state[AUTH_STATE_KEY] = True
     st.session_state[AUTH_TOKEN_KEY] = token
-    st.session_state[AUTH_ACTOR_KEY] = actor
+    st.session_state[AUTH_ACTOR_KEY] = payload.get("actor", "admin")
     st.session_state[AUTH_STORAGE_ACTION_KEY] = "save"
     return True
 
@@ -197,6 +203,16 @@ def ensure_admin_access() -> None:
 
 def render_logout_control() -> None:
     if st.sidebar.button("Sair", key="logout-admin", use_container_width=True):
+        token = st.session_state.get(AUTH_TOKEN_KEY)
+        if token:
+            try:
+                with httpx.Client(timeout=20.0) as client:
+                    client.post(
+                        f"{API_BASE}/settings/admin/logout",
+                        headers={"X-Admin-Token": token},
+                    )
+            except Exception:
+                pass
         st.session_state.pop(AUTH_STATE_KEY, None)
         st.session_state.pop(AUTH_TOKEN_KEY, None)
         st.session_state.pop(AUTH_ACTOR_KEY, None)
