@@ -33,7 +33,7 @@ def friendly_error(message: str) -> str:
 def render_friendly_error(exc: Exception) -> None:
     st.error(friendly_error(str(exc)))
     with st.expander("Detalhe tecnico", expanded=False):
-        st.caption(str(exc))
+        st.caption(f"{exc.__class__.__name__}: detalhe sensivel ocultado")
 
 
 configure_page("Configuracoes", "C")
@@ -87,6 +87,10 @@ with col_form:
         clear_gemini = st.checkbox("Remover chave Gemini salva")
         clear_anthropic = st.checkbox("Remover chave Anthropic salva")
         notes = st.text_area("Observacoes", value=config.get("notes", ""))
+        platform_fallback = st.checkbox(
+            "Permitir fallback para credenciais da plataforma quando faltar chave do cliente",
+            value=config.get("enable_platform_fallback", True),
+        )
 
         submitted = st.form_submit_button("Salvar configuracoes", use_container_width=True)
         if submitted:
@@ -98,7 +102,7 @@ with col_form:
                     "default_model": "gemini-2.5-flash",
                     "fallback_provider": "anthropic",
                     "fallback_model": "claude-3-5-haiku-20241022",
-                    "enable_platform_fallback": True,
+                    "enable_platform_fallback": platform_fallback,
                     "notes": notes,
                     "gemini_api_key": gemini_api_key if gemini_api_key else None,
                     "anthropic_api_key": anthropic_api_key if anthropic_api_key else None,
@@ -115,8 +119,21 @@ with col_test:
     st.markdown("### Estado atual")
     st.info(
         f"Modo: {mode_options.get(config['credential_mode'], config['credential_mode'])}\n\n"
+        f"Politica: {config.get('credential_policy_label', '-')}\n\n"
         f"Gemini configurado: {'Sim' if config['gemini_key_configured'] else 'Nao'}\n\n"
         f"Anthropic configurado: {'Sim' if config['anthropic_key_configured'] else 'Nao'}"
+    )
+    st.caption(
+        f"Gemini efetivo: {config.get('effective_gemini_credential_source', '-')} | "
+        f"Anthropic efetivo: {config.get('effective_anthropic_credential_source', '-')}"
+    )
+    st.caption(
+        f"Cliente Gemini: {'Sim' if config.get('customer_gemini_key_configured') else 'Nao'} | "
+        f"Cliente Anthropic: {'Sim' if config.get('customer_anthropic_key_configured') else 'Nao'}"
+    )
+    st.caption(
+        f"Plataforma Gemini: {'Sim' if config.get('platform_gemini_key_configured') else 'Nao'} | "
+        f"Plataforma Anthropic: {'Sim' if config.get('platform_anthropic_key_configured') else 'Nao'}"
     )
     st.caption(
         f"Instancia: {security_meta['instance_name']} ({security_meta['instance_id']}) | "
@@ -126,7 +143,7 @@ with col_test:
         f"Ultima rotacao Gemini: {format_dt(config.get('gemini_key_updated_at'))} | "
         f"Anthropic: {format_dt(config.get('anthropic_key_updated_at'))}"
     )
-    st.caption("As chaves ficam mascaradas e a tela evita expor detalhes sensiveis desnecessarios.")
+    st.caption("As chaves do cliente ficam mascaradas no painel e o runtime evita expor segredos em respostas e logs.")
     if security_meta.get("uses_default_password"):
         st.warning("O bootstrap ainda usa uma senha simples. Ajuste ADMIN_PASSWORD no .env antes do uso com cliente.")
 

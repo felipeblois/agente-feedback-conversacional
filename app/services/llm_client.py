@@ -32,8 +32,12 @@ def _resolve_model(provider: str, model: str) -> str:
 def _set_provider_env(runtime_config: Dict[str, str]) -> None:
     if runtime_config.get("gemini_api_key"):
         os.environ["GEMINI_API_KEY"] = runtime_config["gemini_api_key"]
+    elif "GEMINI_API_KEY" in os.environ:
+        os.environ.pop("GEMINI_API_KEY", None)
     if runtime_config.get("anthropic_api_key"):
         os.environ["ANTHROPIC_API_KEY"] = runtime_config["anthropic_api_key"]
+    elif "ANTHROPIC_API_KEY" in os.environ:
+        os.environ.pop("ANTHROPIC_API_KEY", None)
     if settings.openai_api_key:
         os.environ["OPENAI_API_KEY"] = settings.openai_api_key
 
@@ -119,7 +123,8 @@ async def _call_provider(
         return None
 
     full_model = _resolve_model(provider, model)
-    _log_attempt(stage, provider, full_model, runtime_config.get("credential_source", "platform"))
+    credential_source = runtime_config.get(f"{provider}_credential_source", runtime_config.get("credential_source", "unknown"))
+    _log_attempt(stage, provider, full_model, credential_source)
     started_at = time.perf_counter()
     try:
         response = await litellm.acompletion(
@@ -209,7 +214,7 @@ async def call_llm(
                     stage=stage,
                     provider=provider,
                     model=model,
-                    credential_source=runtime_config.get("credential_source", "platform"),
+                    credential_source=runtime_config.get(f"{provider}_credential_source", runtime_config.get("credential_source", "unknown")),
                 )
                 return content
         except Exception as exc:
@@ -253,6 +258,6 @@ async def test_provider_connection(
         "success": success,
         "provider": provider,
         "model": selected_model,
-        "credential_source": runtime_config.get("credential_source", "platform"),
+        "credential_source": runtime_config.get(f"{provider}_credential_source", runtime_config.get("credential_source", "unknown")),
         "message": "Conexao validada com sucesso." if success else "Nao foi possivel validar a conexao.",
     }

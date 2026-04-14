@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db_session
+from app.core.observability import log_event
 from app.core.security import require_admin_api_key
 from app.core.security import (
     create_admin_session,
@@ -122,7 +123,17 @@ async def test_ai_settings(
     try:
         return await test_provider_connection(db, payload.provider, payload.model)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        log_event(
+            "warning",
+            "ai_settings_test_failed",
+            provider=payload.provider,
+            model=payload.model or "auto",
+            error_type=exc.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Nao foi possivel validar a conexao com o provedor agora.",
+        )
 
 
 @router.get("/ai/audit", response_model=SettingsAuditListResponse)

@@ -26,10 +26,17 @@ class AISettingsResponse(AISettingsBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    customer_gemini_key_configured: bool
+    customer_anthropic_key_configured: bool
+    platform_gemini_key_configured: bool
+    platform_anthropic_key_configured: bool
     gemini_key_configured: bool
     anthropic_key_configured: bool
     gemini_key_masked: str
     anthropic_key_masked: str
+    effective_gemini_credential_source: str
+    effective_anthropic_credential_source: str
+    credential_policy_label: str
     gemini_key_updated_at: Optional[datetime] = None
     anthropic_key_updated_at: Optional[datetime] = None
     created_at: datetime

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     admin_password: str = "change-me-admin"
     admin_api_token: str = ""
     admin_session_ttl_minutes: int = 480
+    settings_encryption_secret: str = ""
 
     default_llm_provider: str = "gemini"
     default_llm_model: str = "gemini-2.5-flash"
