@@ -121,6 +121,8 @@ with kpi_cols[2]:
 with kpi_cols[3]:
     render_kpi_card("AVG", "Score medio", format_score(detail.get("avg_score")), "Media registrada", "purple")
 
+st.markdown("<div style='height: 0.85rem;'></div>", unsafe_allow_html=True)
+
 header_cols = st.columns([4.1, 1.35], gap="small")
 with header_cols[0]:
     render_session_card(
