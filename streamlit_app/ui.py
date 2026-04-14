@@ -9,7 +9,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from app.core.config import get_settings
-from app.core.security import get_admin_api_token, get_admin_runtime_meta
+from app.core.security import get_admin_api_token, get_admin_runtime_meta, parse_admin_auth_header
 
 settings = get_settings()
 
@@ -19,6 +19,79 @@ ADMIN_BASE_URL = settings.admin_base_url_clean
 AUTH_STATE_KEY = "admin_authenticated"
 AUTH_TOKEN_KEY = "admin_api_token"
 AUTH_ACTOR_KEY = "admin_actor"
+AUTH_STORAGE_ACTION_KEY = "admin_storage_action"
+AUTH_QUERY_PARAM = "admin_session"
+
+
+def _render_auth_storage_bridge(action: str = "restore", token: str = "", actor: str = "") -> None:
+    token_js = repr(token)
+    actor_js = repr(actor)
+    components.html(
+        f"""
+        <script>
+            const storageTokenKey = "insightflow_admin_token";
+            const storageActorKey = "insightflow_admin_actor";
+            const action = {action!r};
+            const token = {token_js};
+            const actor = {actor_js};
+            const parentWindow = window.parent;
+
+            if (action === "save") {{
+                if (token) {{
+                    parentWindow.localStorage.setItem(storageTokenKey, token);
+                }}
+                if (actor) {{
+                    parentWindow.localStorage.setItem(storageActorKey, actor);
+                }}
+            }} else if (action === "clear") {{
+                parentWindow.localStorage.removeItem(storageTokenKey);
+                parentWindow.localStorage.removeItem(storageActorKey);
+            }} else if (action === "restore") {{
+                const params = new URLSearchParams(parentWindow.location.search);
+                if (!params.get("{AUTH_QUERY_PARAM}")) {{
+                    const savedToken = parentWindow.localStorage.getItem(storageTokenKey);
+                    if (savedToken) {{
+                        params.set("{AUTH_QUERY_PARAM}", savedToken);
+                        const target = `${{parentWindow.location.pathname}}?${{params.toString()}}${{parentWindow.location.hash}}`;
+                        parentWindow.location.replace(target);
+                    }}
+                }}
+            }}
+        </script>
+        """,
+        height=0,
+    )
+
+
+def _hydrate_admin_session_from_query() -> bool:
+    token = st.query_params.get(AUTH_QUERY_PARAM, "")
+    if not token:
+        return False
+
+    parsed = parse_admin_auth_header(token)
+    if not parsed:
+        st.query_params.clear()
+        st.session_state[AUTH_STORAGE_ACTION_KEY] = "clear"
+        return False
+
+    actor, _source = parsed
+    st.session_state[AUTH_STATE_KEY] = True
+    st.session_state[AUTH_TOKEN_KEY] = token
+    st.session_state[AUTH_ACTOR_KEY] = actor
+    st.session_state[AUTH_STORAGE_ACTION_KEY] = "save"
+    return True
+
+
+def _sync_auth_storage_if_needed() -> None:
+    action = st.session_state.pop(AUTH_STORAGE_ACTION_KEY, None)
+    if action == "save":
+        _render_auth_storage_bridge(
+            action="save",
+            token=st.session_state.get(AUTH_TOKEN_KEY, ""),
+            actor=st.session_state.get(AUTH_ACTOR_KEY, ""),
+        )
+    elif action == "clear":
+        _render_auth_storage_bridge(action="clear")
 
 
 def configure_page(title: str, icon: str) -> None:
@@ -28,7 +101,14 @@ def configure_page(title: str, icon: str) -> None:
 
 def ensure_admin_access() -> None:
     if st.session_state.get(AUTH_STATE_KEY):
+        _sync_auth_storage_if_needed()
         return
+
+    if _hydrate_admin_session_from_query():
+        st.rerun()
+
+    _sync_auth_storage_if_needed()
+    _render_auth_storage_bridge(action="restore")
 
     meta = get_admin_runtime_meta()
     st.markdown(
@@ -88,6 +168,8 @@ def ensure_admin_access() -> None:
                 st.session_state[AUTH_STATE_KEY] = True
                 st.session_state[AUTH_TOKEN_KEY] = payload["token"]
                 st.session_state[AUTH_ACTOR_KEY] = payload["actor"]
+                st.session_state[AUTH_STORAGE_ACTION_KEY] = "save"
+                st.query_params[AUTH_QUERY_PARAM] = payload["token"]
                 st.success("Acesso liberado com sucesso.")
                 st.rerun()
             except httpx.HTTPStatusError as exc:
@@ -118,6 +200,8 @@ def render_logout_control() -> None:
         st.session_state.pop(AUTH_STATE_KEY, None)
         st.session_state.pop(AUTH_TOKEN_KEY, None)
         st.session_state.pop(AUTH_ACTOR_KEY, None)
+        st.session_state[AUTH_STORAGE_ACTION_KEY] = "clear"
+        st.query_params.clear()
         st.rerun()
 
 
