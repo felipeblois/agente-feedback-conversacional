@@ -6,6 +6,7 @@ from loguru import logger
 
 from app.api.dependencies import get_db_session
 from app.core.config import get_settings
+from app.core.public_access import public_access_service
 from app.core.observability import log_event
 from app.models.session import Session
 
@@ -17,11 +18,13 @@ settings = get_settings()
 async def public_chat_page(public_token: str, request: Request, db: AsyncSession = Depends(get_db_session)):
     stmt = select(Session).where(Session.public_token == public_token, Session.status == "active")
     result = await db.execute(stmt)
-    session = result.scalar_one_or_none()
-    
-    if not session:
-        logger.warning(f"Invalid or inactive public_token accessed: {public_token}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found or inactive")
+    session = public_access_service.validate_session_access(
+        result.scalar_one_or_none(),
+        public_token=public_token,
+        route_name="page",
+        client_ip=getattr(request.client, "host", "unknown"),
+        user_agent=request.headers.get("user-agent", ""),
+    )
 
     log_event("info", "public_page_rendered", session_id=session.id, public_token=public_token)
         

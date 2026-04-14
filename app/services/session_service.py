@@ -1,10 +1,12 @@
 import secrets
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.public_access import public_access_service
 from app.models.analysis_run import AnalysisRun
 from app.models.message import Message
 from app.models.participant import Participant
@@ -151,6 +153,7 @@ class SessionService:
         detail.update(
             {
                 "public_url": f"{settings.public_base_url_clean}/f/{session.public_token}",
+                "public_link_status": public_access_service.public_link_status(session),
                 "score_distribution": score_distribution,
                 "recent_responses": recent_responses,
                 "latest_analysis_summary": latest_analysis.get("summary") if latest_analysis else None,
@@ -332,6 +335,61 @@ class SessionService:
         await db.refresh(db_obj)
         return db_obj
 
+    async def revoke_public_link(
+        self,
+        db: AsyncSession,
+        id: int,
+        actor: Optional[str] = None,
+    ) -> Optional[Session]:
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            return None
+        db_obj.public_link_enabled = False
+        db_obj.public_link_revoked_at = self._utcnow_naive()
+        if actor:
+            db_obj.updated_by_admin_username = actor
+        db.add(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
+        return db_obj
+
+    async def reactivate_public_link(
+        self,
+        db: AsyncSession,
+        id: int,
+        actor: Optional[str] = None,
+    ) -> Optional[Session]:
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            return None
+        db_obj.public_link_enabled = True
+        db_obj.public_link_revoked_at = None
+        if actor:
+            db_obj.updated_by_admin_username = actor
+        db.add(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
+        return db_obj
+
+    async def rotate_public_token(
+        self,
+        db: AsyncSession,
+        id: int,
+        actor: Optional[str] = None,
+    ) -> Optional[Session]:
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            return None
+        db_obj.public_token = secrets.token_urlsafe(8)
+        db_obj.public_link_enabled = True
+        db_obj.public_link_revoked_at = None
+        if actor:
+            db_obj.updated_by_admin_username = actor
+        db.add(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
+        return db_obj
+
     async def reactivate(self, db: AsyncSession, id: int, actor: Optional[str] = None) -> Optional[Session]:
         db_obj = await self.get(db, id)
         if not db_obj:
@@ -415,6 +473,8 @@ class SessionService:
                     "created_by_admin_username": session.created_by_admin_username,
                     "updated_by_admin_username": session.updated_by_admin_username,
                     "public_token": session.public_token,
+                    "public_link_enabled": session.public_link_enabled,
+                    "public_link_expires_at": session.public_link_expires_at,
                     "created_at": session.created_at,
                     "updated_at": session.updated_at,
                     "response_count": response_count,
@@ -445,6 +505,9 @@ class SessionService:
             )
         )
         return result.scalar_one_or_none()
+
+    def _utcnow_naive(self) -> datetime:
+        return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 session_service = SessionService()

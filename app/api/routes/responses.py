@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.api.dependencies import get_db_session
+from app.core.public_access import public_access_service
 from app.core.observability import log_event
 from app.models.session import Session
 from app.schemas.response import ResponseStart, StartResponse, ScoreSubmit, ScoreResponse, MessageSubmit, MessageResponse, FinishResponse, StatusResponse
@@ -11,17 +12,36 @@ from app.services.conversation_service import conversation_service
 
 router = APIRouter()
 
-async def get_session_by_token(public_token: str, db: AsyncSession) -> Session:
+async def get_session_by_token(
+    public_token: str,
+    db: AsyncSession,
+    request: Request,
+    route_name: str,
+) -> Session:
     stmt = select(Session).where(Session.public_token == public_token, Session.status == "active")
     result = await db.execute(stmt)
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or inactive")
-    return session
+    return public_access_service.validate_session_access(
+        result.scalar_one_or_none(),
+        public_token=public_token,
+        route_name=route_name,
+        client_ip=getattr(request.client, "host", "unknown"),
+        user_agent=request.headers.get("user-agent", ""),
+    )
 
 @router.post("/{public_token}/start", response_model=StartResponse)
-async def start_response(public_token: str, data: ResponseStart, db: AsyncSession = Depends(get_db_session)):
-    session = await get_session_by_token(public_token, db)
+async def start_response(
+    public_token: str,
+    data: ResponseStart,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    session = await get_session_by_token(public_token, db, request, "start")
+    public_access_service.check_honeypot(
+        session.id,
+        public_token,
+        getattr(request.client, "host", "unknown"),
+        data.website,
+    )
 
     if not data.consent_accepted:
         raise HTTPException(
@@ -59,8 +79,13 @@ async def start_response(public_token: str, data: ResponseStart, db: AsyncSessio
     return StartResponse(response_id=response_id, first_question=first_question)
 
 @router.post("/{public_token}/score", response_model=ScoreResponse)
-async def submit_score(public_token: str, data: ScoreSubmit, db: AsyncSession = Depends(get_db_session)):
-    session = await get_session_by_token(public_token, db)
+async def submit_score(
+    public_token: str,
+    data: ScoreSubmit,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    session = await get_session_by_token(public_token, db, request, "score")
     
     # Save score
     await response_service.update_score(db, data.response_id, data.score)
@@ -95,8 +120,13 @@ async def submit_score(public_token: str, data: ScoreSubmit, db: AsyncSession = 
     )
 
 @router.post("/{public_token}/message", response_model=MessageResponse)
-async def submit_message(public_token: str, data: MessageSubmit, db: AsyncSession = Depends(get_db_session)):
-    session = await get_session_by_token(public_token, db)
+async def submit_message(
+    public_token: str,
+    data: MessageSubmit,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    session = await get_session_by_token(public_token, db, request, "message")
     
     # Save user message
     await conversation_service.save_user_message(db, data.response_id, data.message)
@@ -132,8 +162,13 @@ async def submit_message(public_token: str, data: MessageSubmit, db: AsyncSessio
         )
 
 @router.post("/{public_token}/finish", response_model=StatusResponse)
-async def finish_conversation(public_token: str, data: FinishResponse, db: AsyncSession = Depends(get_db_session)):
-    session = await get_session_by_token(public_token, db)
+async def finish_conversation(
+    public_token: str,
+    data: FinishResponse,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    session = await get_session_by_token(public_token, db, request, "finish")
     await response_service.mark_completed(db, data.response_id)
     log_event("info", "public_finish_called", session_id=session.id, response_id=data.response_id)
     return StatusResponse(status="completed")

@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
         startBtn: document.getElementById("start-chat-btn"),
         startContainer: document.getElementById("start-container"),
         participantName: document.getElementById("participant-name"),
+        website: document.getElementById("website"),
         consentCheckbox: document.getElementById("consent-checkbox"),
     };
 
@@ -76,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     els.startBtn.addEventListener("click", async () => {
         const participantName = els.participantName ? els.participantName.value.trim() : "";
+        const website = els.website ? els.website.value.trim() : "";
         const consentAccepted = Boolean(els.consentCheckbox && els.consentCheckbox.checked);
 
         if (!consentAccepted) {
@@ -84,8 +86,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const startPayload = participantName
-            ? { anonymous: false, participant_name: participantName, consent_accepted: true }
-            : { anonymous: true, consent_accepted: true };
+            ? { anonymous: false, participant_name: participantName, consent_accepted: true, website }
+            : { anonymous: true, consent_accepted: true, website };
 
         try {
             const res = await fetch(`/api/v1/public/${token}/start`, {

@@ -7,6 +7,7 @@ class ResponseStart(BaseModel):
     participant_email: Optional[str] = None
     anonymous: bool = True
     consent_accepted: bool = False
+    website: str = ""
 
 class QuestionDetail(BaseModel):
     type: str # "score" or "text"

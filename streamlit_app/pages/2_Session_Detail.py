@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 import pandas as pd
@@ -43,6 +44,14 @@ FEEDBACK_TYPE_OPTIONS = [
     "onboarding",
 ]
 
+PUBLIC_LINK_STATUS_LABELS = {
+    "active": "Ativo",
+    "disabled": "Desabilitado",
+    "revoked": "Revogado",
+    "expired": "Expirado",
+    "inactive": "Inativo",
+}
+
 
 def friendly_provider_name(provider: Optional[str], model: Optional[str] = None) -> str:
     normalized = (provider or "").lower()
@@ -57,6 +66,10 @@ def friendly_provider_name(provider: Optional[str], model: Optional[str] = None)
     if normalized in {"fallback", "static_fallback", "llm_fallback_parse_error", "empty"}:
         return "Jarvis"
     return provider or "Auto"
+
+
+def friendly_public_link_status(status: Optional[str]) -> str:
+    return PUBLIC_LINK_STATUS_LABELS.get((status or "").lower(), status or "Desconhecido")
 
 
 configure_page("Detalhe da sessao", "A")
@@ -225,6 +238,7 @@ with overview_tab:
                 str(detail.get("score_type", "")).replace("_", " ").title(),
                 detail.get("target_audience") or "Publico nao informado",
                 f"{detail.get('max_followup_questions')} aprofundamentos",
+                f"Link {friendly_public_link_status(detail.get('public_link_status'))}",
             ],
             facts=[
                 ("Tema", detail.get("theme_summary") or "Nao informado"),
@@ -233,6 +247,8 @@ with overview_tab:
                 ("Criada", format_dt(detail.get("created_at"))),
                 ("Criado por", detail.get("created_by_admin_username") or "bootstrap"),
                 ("Ultima analise", format_dt(detail.get("last_analysis_at"))),
+                ("Status do link", friendly_public_link_status(detail.get("public_link_status"))),
+                ("Expira em", format_dt(detail.get("public_link_expires_at"))),
                 ("Link publico", detail["public_url"]),
             ],
         )
@@ -302,6 +318,11 @@ with overview_tab:
                     "value": detail.get("status", "-").title(),
                     "copy": f"Autor: {detail.get('created_by_admin_username') or 'bootstrap'}",
                 },
+                {
+                    "label": "Link publico",
+                    "value": friendly_public_link_status(detail.get("public_link_status")),
+                    "copy": format_dt(detail.get("public_link_expires_at")) or "Sem expiracao definida",
+                },
             ],
             compact=True,
         )
@@ -350,6 +371,16 @@ with briefing_tab:
 with edit_tab:
     st.markdown("### Editar sessao")
     st.caption("Ajuste briefing, tipo de feedback e limite de aprofundamento sem recriar a sessao.")
+    current_expiration = detail.get("public_link_expires_at")
+    expiration_enabled_default = bool(current_expiration)
+    expiration_date_default = (
+        current_expiration.date() if isinstance(current_expiration, datetime) else datetime.now().date()
+    )
+    expiration_time_default = (
+        current_expiration.time().replace(second=0, microsecond=0)
+        if isinstance(current_expiration, datetime)
+        else datetime.now().time().replace(second=0, microsecond=0)
+    )
     with st.form(f"edit_session_form_{selected_id}"):
         title = st.text_input("Titulo", value=detail.get("title") or "")
         description = st.text_area("Descricao", value=detail.get("description") or "")
@@ -372,9 +403,39 @@ with edit_tab:
             max_value=20,
             value=int(detail.get("max_followup_questions") or 3),
         )
+        st.markdown("#### Controle do link publico")
+        public_link_enabled = st.toggle(
+            "Link publico habilitado",
+            value=detail.get("public_link_enabled", True),
+            help="Quando desativado, o link deixa de aceitar novos acessos imediatamente.",
+        )
+        expiration_enabled = st.checkbox(
+            "Definir expiracao do link publico",
+            value=expiration_enabled_default,
+            help="Use quando quiser que a sessao pare de aceitar respostas automaticamente.",
+        )
+        if expiration_enabled:
+            expiration_cols = st.columns(2)
+            with expiration_cols[0]:
+                expiration_date = st.date_input("Data de expiracao", value=expiration_date_default)
+            with expiration_cols[1]:
+                expiration_time = st.time_input(
+                    "Horario de expiracao",
+                    value=expiration_time_default,
+                    step=60,
+                )
+        else:
+            expiration_date = None
+            expiration_time = None
         submitted = st.form_submit_button("Salvar alteracoes", use_container_width=True)
         if submitted:
             try:
+                public_link_expires_at = None
+                if expiration_enabled and expiration_date and expiration_time:
+                    public_link_expires_at = datetime.combine(
+                        expiration_date,
+                        expiration_time,
+                    ).isoformat()
                 api_patch(
                     f"/sessions/{selected_id}",
                     {
@@ -387,12 +448,62 @@ with edit_tab:
                         "topics_to_explore": topics_to_explore,
                         "ai_guidance": ai_guidance,
                         "max_followup_questions": max_followup_questions,
+                        "public_link_enabled": public_link_enabled,
+                        "public_link_expires_at": public_link_expires_at,
                     },
                 )
                 st.success("Sessao atualizada com sucesso.")
                 st.rerun()
             except Exception as exc:
                 st.error(f"Nao foi possivel atualizar a sessao: {exc}")
+
+    st.markdown("### Controle do link publico")
+    link_control_cols = st.columns(3)
+    with link_control_cols[0]:
+        if st.button("Revogar link", use_container_width=True):
+            try:
+                api_post(f"/sessions/{selected_id}/public-link/revoke")
+                st.success("Link publico revogado com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nao foi possivel revogar o link: {exc}")
+    with link_control_cols[1]:
+        if st.button("Reativar link", use_container_width=True):
+            try:
+                api_post(f"/sessions/{selected_id}/public-link/reactivate")
+                st.success("Link publico reativado com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nao foi possivel reativar o link: {exc}")
+    with link_control_cols[2]:
+        if st.button("Gerar novo link", use_container_width=True):
+            try:
+                api_post(f"/sessions/{selected_id}/public-link/rotate")
+                st.success("Novo link publico gerado com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nao foi possivel gerar um novo link: {exc}")
+
+    render_stat_band(
+        [
+            {
+                "label": "Status do link",
+                "value": friendly_public_link_status(detail.get("public_link_status")),
+                "copy": "Controle atual de acesso publico.",
+            },
+            {
+                "label": "Expiracao",
+                "value": format_dt(detail.get("public_link_expires_at")) or "-",
+                "copy": "Vazio significa link sem prazo automatico.",
+            },
+            {
+                "label": "URL publica",
+                "value": "Disponivel" if detail.get("public_link_enabled", True) else "Bloqueada",
+                "copy": "Use revogar ou gerar novo link quando precisar cortar acesso.",
+            },
+        ],
+        compact=True,
+    )
 
     st.markdown("### Zona sensivel")
     danger_cols = st.columns([1, 2.2])

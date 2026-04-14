@@ -73,6 +73,45 @@ async def reactivate_session(
     log_event("info", "session_reactivated", session_id=session_id, status=session.status, actor=actor)
     return session
 
+
+@router.post("/{session_id}/public-link/revoke", response_model=SessionResponse)
+async def revoke_public_link(
+    session_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    actor: str = Depends(require_admin_api_key),
+):
+    session = await session_service.revoke_public_link(db, id=session_id, actor=actor)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    log_event("warning", "public_link_revoked", session_id=session_id, actor=actor)
+    return session
+
+
+@router.post("/{session_id}/public-link/reactivate", response_model=SessionResponse)
+async def reactivate_public_link(
+    session_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    actor: str = Depends(require_admin_api_key),
+):
+    session = await session_service.reactivate_public_link(db, id=session_id, actor=actor)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    log_event("info", "public_link_reactivated", session_id=session_id, actor=actor)
+    return session
+
+
+@router.post("/{session_id}/public-link/rotate", response_model=SessionResponse)
+async def rotate_public_link(
+    session_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    actor: str = Depends(require_admin_api_key),
+):
+    session = await session_service.rotate_public_token(db, id=session_id, actor=actor)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    log_event("warning", "public_link_rotated", session_id=session_id, actor=actor)
+    return session
+
 @router.get("/{session_id}/detail", response_model=SessionDetailResponse)
 async def get_session_detail(
     session_id: int,
