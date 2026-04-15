@@ -15,7 +15,6 @@ from ui import (
     panel_header,
     render_session_card,
     render_sidebar,
-    render_spotlight_card,
     render_stat_band,
     status_pill,
     push_flash,
@@ -80,20 +79,6 @@ if sort_mode == "Mais respostas":
     filtered_sessions = sorted(filtered_sessions, key=lambda item: item["response_count"], reverse=True)
 elif sort_mode == "Maior conclusao":
     filtered_sessions = sorted(filtered_sessions, key=lambda item: item["completion_rate"], reverse=True)
-
-if filtered_sessions:
-    lead_session = filtered_sessions[0]
-    render_spotlight_card(
-        "Sessao em foco",
-        lead_session["title"],
-        lead_session.get("description") or "Use esta area para acompanhar a sessao com maior prioridade operacional.",
-        [
-            str(lead_session.get("score_type", "")).replace("_", " ").title(),
-            f"{lead_session['response_count']} respostas",
-            f"{format_pct(lead_session['completion_rate'])} de conclusao",
-            lead_session.get("target_audience") or "Publico nao informado",
-        ],
-    )
 
 render_stat_band(
     [
