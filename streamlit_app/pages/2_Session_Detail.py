@@ -77,6 +77,40 @@ configure_page("Detalhe da sessao", "A")
 ensure_admin_access()
 render_sidebar("detail")
 
+st.markdown(
+    """
+    <style>
+        div[data-testid="stTabs"] button[role="tab"] {
+            min-height: 48px;
+            padding: 0.75rem 1.1rem;
+            border-radius: 14px 14px 0 0;
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: #a6acc9;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(167, 176, 211, 0.10);
+            transition: all 0.18s ease;
+        }
+        div[data-testid="stTabs"] button[role="tab"]:hover {
+            color: #f2f4fb;
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(167, 176, 211, 0.16);
+        }
+        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+            color: #f2f4fb;
+            background: linear-gradient(180deg, rgba(74, 125, 255, 0.22), rgba(74, 125, 255, 0.10));
+            border-color: rgba(74, 125, 255, 0.42);
+            box-shadow: inset 0 -2px 0 rgba(74, 125, 255, 0.95);
+        }
+        div[data-testid="stTabs"] div[role="tablist"] {
+            gap: 0.45rem;
+            margin-bottom: 0.75rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 panel_header(
     "Insight center",
     "Detalhe da sessao",
