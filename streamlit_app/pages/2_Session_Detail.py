@@ -104,6 +104,7 @@ st.markdown(
         }
         div[data-testid="stTabs"] div[role="tablist"] {
             gap: 0.45rem;
+            margin-top: 0.6rem;
             margin-bottom: 0.75rem;
         }
     </style>
