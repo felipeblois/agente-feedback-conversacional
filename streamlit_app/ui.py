@@ -830,7 +830,6 @@ def inject_theme() -> None:
 
 
 def render_sidebar(current_page: str) -> None:
-    st.sidebar.markdown("## Implantar")
     nav_items = [
         ("dashboard", "Dashboard", "[D]", "Home.py"),
         ("sessions", "Sessoes", "[S]", "pages/1_Sessions.py"),
@@ -845,17 +844,7 @@ def render_sidebar(current_page: str) -> None:
             st.switch_page(page)
 
     st.sidebar.markdown("")
-    st.sidebar.markdown(
-        """
-        <div class="sidebar-block">
-            <div class="sidebar-title">Workspace local</div>
-            <div class="sidebar-copy">Painel administrativo do agente com operacao em FastAPI, Streamlit e SQLite.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     st.sidebar.markdown("---")
-    st.sidebar.caption("Configuracoes e operacao centralizadas no painel.")
     if st.session_state.get(AUTH_ACTOR_KEY):
         st.sidebar.caption(f"Conectado como {st.session_state[AUTH_ACTOR_KEY]}")
     render_logout_control()
